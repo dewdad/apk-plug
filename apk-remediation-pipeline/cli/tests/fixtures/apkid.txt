@@ -1,0 +1,6 @@
+[+] APKiD 2.1.5 - Android Application Identifier
+[*] test.apk
+ |-> compiler : dx (Android SDK)
+ |-> packer : Bangcle/SecShell (possible)
+ |-> obfuscator : ProGuard
+ |-> anti_vm : detected

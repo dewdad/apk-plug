@@ -1,0 +1,24 @@
+{
+  "threat_level": "high",
+  "total_score": 75,
+  "crimes": [
+    {
+      "crime": "Send SMS messages",
+      "confidence": 80,
+      "permissions": ["android.permission.SEND_SMS"],
+      "native_api": ["Landroid/telephony/SmsManager;->sendTextMessage"]
+    },
+    {
+      "crime": "Read sensitive data and send via network",
+      "confidence": 65,
+      "permissions": ["android.permission.INTERNET", "android.permission.READ_CONTACTS"],
+      "native_api": ["Ljava/net/HttpURLConnection;->connect"]
+    },
+    {
+      "crime": "Get device location",
+      "confidence": 45,
+      "permissions": ["android.permission.ACCESS_FINE_LOCATION"],
+      "native_api": ["Landroid/location/LocationManager;->getLastKnownLocation"]
+    }
+  ]
+}

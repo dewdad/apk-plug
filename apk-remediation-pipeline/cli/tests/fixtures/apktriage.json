@@ -1,0 +1,26 @@
+{
+  "yara": [
+    {
+      "rule": "android_banker",
+      "description": "Banking trojan indicators detected"
+    },
+    {
+      "rule": "suspicious_permissions",
+      "description": "Combination of SMS and contacts access"
+    }
+  ],
+  "mitre": [
+    {
+      "id": "T1437",
+      "name": "Application Layer Protocol"
+    },
+    {
+      "id": "T1406",
+      "name": "Obfuscated Files or Information"
+    },
+    {
+      "id": "T1418",
+      "name": "Application Discovery"
+    }
+  ]
+}

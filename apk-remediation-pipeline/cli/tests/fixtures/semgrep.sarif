@@ -1,0 +1,74 @@
+{
+  "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "semgrep",
+          "version": "1.50.0",
+          "semanticVersion": "1.50.0"
+        }
+      },
+      "results": [
+        {
+          "ruleId": "java.lang.security.audit.crypto.insecure-cipher",
+          "level": "error",
+          "message": {
+            "text": "Insecure cipher mode detected: ECB mode is vulnerable."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "com/example/test/CryptoUtils.java"
+                },
+                "region": {
+                  "startLine": 42
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "java.lang.security.audit.hardcoded-secret",
+          "level": "warning",
+          "message": {
+            "text": "Hardcoded secret detected in source code."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "com/example/test/Config.java"
+                },
+                "region": {
+                  "startLine": 15
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "java.lang.security.audit.ssl.insecure-hostname-verifier",
+          "level": "error",
+          "message": {
+            "text": "Insecure hostname verifier allows all hostnames."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "com/example/test/NetworkHelper.java"
+                },
+                "region": {
+                  "startLine": 78
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

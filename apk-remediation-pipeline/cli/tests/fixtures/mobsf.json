@@ -1,0 +1,59 @@
+{
+  "file_name": "test.apk",
+  "app_name": "TestApp",
+  "package_name": "com.example.test",
+  "permissions": {
+    "android.permission.INTERNET": {
+      "status": "dangerous",
+      "info": "Full network access",
+      "description": "Allows the app to create network sockets."
+    },
+    "android.permission.READ_CONTACTS": {
+      "status": "dangerous",
+      "info": "Read contacts",
+      "description": "Allows the app to read contacts."
+    },
+    "android.permission.ACCESS_FINE_LOCATION": {
+      "status": "dangerous",
+      "info": "Precise location",
+      "description": "Allows the app to get precise location."
+    }
+  },
+  "manifest_analysis": [
+    {
+      "title": "Application is debuggable",
+      "severity": "high",
+      "description": "Debug mode is enabled in the manifest."
+    },
+    {
+      "title": "Application allows backup",
+      "severity": "medium",
+      "description": "Backup flag is enabled."
+    }
+  ],
+  "malicious_code": [
+    {
+      "title": "Base64 encoded strings",
+      "description": "Found encoded strings that may hide malicious content."
+    }
+  ],
+  "secrets": [
+    {
+      "description": "Hardcoded API key found: AIzaSy..."
+    }
+  ],
+  "urls": [
+    "https://api.example.com/v1/data",
+    "http://malicious-c2.evil.net/beacon"
+  ],
+  "exported_activities": [
+    "com.example.test.MainActivity",
+    "com.example.test.DeepLinkActivity"
+  ],
+  "exported_services": [
+    "com.example.test.BackgroundService"
+  ],
+  "exported_receivers": [
+    "com.example.test.BootReceiver"
+  ]
+}

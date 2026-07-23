@@ -1,0 +1,219 @@
+{
+  "aggregate_risk": {
+    "drivers": [
+      "quark_high_threat",
+      "packer_detected"
+    ],
+    "level": "critical",
+    "score": 100
+  },
+  "apk": {
+    "name": "test.apk",
+    "sha256": ""
+  },
+  "components": [
+    {
+      "exported": true,
+      "name": "com.example.test.MainActivity",
+      "source_tool": "mobsf",
+      "type": "activitie"
+    },
+    {
+      "exported": true,
+      "name": "com.example.test.DeepLinkActivity",
+      "source_tool": "mobsf",
+      "type": "activitie"
+    },
+    {
+      "exported": true,
+      "name": "com.example.test.BackgroundService",
+      "source_tool": "mobsf",
+      "type": "service"
+    },
+    {
+      "exported": true,
+      "name": "com.example.test.BootReceiver",
+      "source_tool": "mobsf",
+      "type": "receiver"
+    }
+  ],
+  "findings": {
+    "apkid": [
+      {
+        "description": "Packer detected: Bangcle/SecShell (possible)",
+        "rule": "packer_detected",
+        "severity": "high"
+      },
+      {
+        "description": "Obfuscator detected: ProGuard",
+        "rule": "obfuscator_detected",
+        "severity": "medium"
+      }
+    ],
+    "apkleaks": [
+      {
+        "category": "Firebase_URL",
+        "description": "https://test-project.firebaseio.com",
+        "rule": "apkleaks_firebase_url",
+        "severity": "medium"
+      },
+      {
+        "category": "AWS_Key",
+        "description": "AKIAIOSFODNN7EXAMPLE",
+        "rule": "apkleaks_aws_key",
+        "severity": "medium"
+      },
+      {
+        "category": "Google_API",
+        "description": "AIzaSyDaGmWKa4JsXZ-HjGw7ISLn_3namBGewQe",
+        "rule": "apkleaks_google_api",
+        "severity": "medium"
+      },
+      {
+        "category": "IP_Address",
+        "description": "192.168.1.100",
+        "rule": "apkleaks_ip_address",
+        "severity": "medium"
+      },
+      {
+        "category": "IP_Address",
+        "description": "10.0.0.1",
+        "rule": "apkleaks_ip_address",
+        "severity": "medium"
+      }
+    ],
+    "apktriage": [
+      {
+        "description": "Banking trojan indicators detected",
+        "rule": "yara_android_banker",
+        "severity": "high"
+      },
+      {
+        "description": "Combination of SMS and contacts access",
+        "rule": "yara_suspicious_permissions",
+        "severity": "high"
+      }
+    ],
+    "mobsf": [
+      {
+        "description": "Debug mode is enabled in the manifest.",
+        "rule": "Application is debuggable",
+        "severity": "high"
+      },
+      {
+        "description": "Backup flag is enabled.",
+        "rule": "Application allows backup",
+        "severity": "medium"
+      },
+      {
+        "description": "Found encoded strings that may hide malicious content.",
+        "rule": "Base64 encoded strings",
+        "severity": "high"
+      },
+      {
+        "description": "Hardcoded API key found: AIzaSy...",
+        "rule": "hardcoded_secret",
+        "severity": "high"
+      }
+    ],
+    "quark": [
+      {
+        "confidence": 80,
+        "description": "Send SMS messages",
+        "rule": "Send SMS messages",
+        "severity": "critical"
+      },
+      {
+        "confidence": 65,
+        "description": "Read sensitive data and send via network",
+        "rule": "Read sensitive data and send via network",
+        "severity": "high"
+      },
+      {
+        "confidence": 45,
+        "description": "Get device location",
+        "rule": "Get device location",
+        "severity": "medium"
+      }
+    ],
+    "semgrep": [
+      {
+        "description": "Insecure cipher mode detected: ECB mode is vulnerable.",
+        "location": "com/example/test/CryptoUtils.java:42",
+        "rule": "java.lang.security.audit.crypto.insecure-cipher",
+        "severity": "high"
+      },
+      {
+        "description": "Hardcoded secret detected in source code.",
+        "location": "com/example/test/Config.java:15",
+        "rule": "java.lang.security.audit.hardcoded-secret",
+        "severity": "medium"
+      },
+      {
+        "description": "Insecure hostname verifier allows all hostnames.",
+        "location": "com/example/test/NetworkHelper.java:78",
+        "rule": "java.lang.security.audit.ssl.insecure-hostname-verifier",
+        "severity": "high"
+      }
+    ]
+  },
+  "generated_at": "2026-07-23T12:00:00+00:00",
+  "mitre_techniques": [
+    {
+      "id": "T1437",
+      "name": "Application Layer Protocol"
+    },
+    {
+      "id": "T1406",
+      "name": "Obfuscated Files or Information"
+    },
+    {
+      "id": "T1418",
+      "name": "Application Discovery"
+    }
+  ],
+  "permissions": [
+    "android.permission.ACCESS_FINE_LOCATION",
+    "android.permission.INTERNET",
+    "android.permission.READ_CONTACTS"
+  ],
+  "schema_version": "1.0.0",
+  "tools": {
+    "apkid": {
+      "obfuscators": [
+        "ProGuard"
+      ],
+      "packers": [
+        "Bangcle/SecShell (possible)"
+      ],
+      "status": "ran"
+    },
+    "apkleaks": {
+      "status": "ran"
+    },
+    "apktriage": {
+      "status": "ran",
+      "yara_matches": [
+        "android_banker",
+        "suspicious_permissions"
+      ]
+    },
+    "mobsf": {
+      "status": "ran"
+    },
+    "quark": {
+      "status": "ran",
+      "threat_level": "high",
+      "total_score": 75
+    },
+    "semgrep": {
+      "status": "ran"
+    }
+  },
+  "urls": [
+    "http://malicious-c2.evil.net/beacon",
+    "https://api.example.com/v1/data",
+    "https://api.example.com/v1/users",
+    "https://cdn.example.com/assets"
+  ]
+}

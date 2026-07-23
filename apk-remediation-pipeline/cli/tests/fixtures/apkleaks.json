@@ -1,0 +1,22 @@
+{
+  "results": {
+    "URL": [
+      "https://api.example.com/v1/users",
+      "http://malicious-c2.evil.net/beacon",
+      "https://cdn.example.com/assets"
+    ],
+    "Firebase_URL": [
+      "https://test-project.firebaseio.com"
+    ],
+    "AWS_Key": [
+      "AKIAIOSFODNN7EXAMPLE"
+    ],
+    "Google_API": [
+      "AIzaSyDaGmWKa4JsXZ-HjGw7ISLn_3namBGewQe"
+    ],
+    "IP_Address": [
+      "192.168.1.100",
+      "10.0.0.1"
+    ]
+  }
+}

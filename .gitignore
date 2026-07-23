@@ -1,0 +1,21 @@
+# --- Signing material: NEVER commit ---
+keystores/
+*.jks
+*.keystore
+
+# --- Runtime working trees (per-APK analysis output) ---
+workspace/
+
+# --- Secrets / local env ---
+.env
+
+# --- Python build/test artifacts (apk-plug CLI) ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.venv/
+venv/
