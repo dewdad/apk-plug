@@ -19,3 +19,7 @@ dist/
 .pytest_cache/
 .venv/
 venv/
+
+# --- Local tooling artifacts (codegraph index/symlink) ---
+.codegraph
+.codegraph/
