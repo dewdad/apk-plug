@@ -149,7 +149,16 @@ curl -fsSL "$UAS_URL" -o "$LOCAL_SHARE/uber-apk-signer.jar" || warn "uber-apk-si
 info "Installing Python security tools via pipx..."
 
 # apktriage — offline YARA + MITRE scanner
-pipx install apktriage || warn "apktriage install failed"
+# NOTE: apktriage is NOT published on PyPI. It only exists as a GitHub repo.
+# Upstream gpamarthy/apktriage@main has two blocking packaging bugs:
+#   1. Duplicate wheel entry (redundant force-include of src/apktriage/data)
+#      causes hatchling to abort every wheel build.
+#   2. requires-python = ">=3.11,<3.13" refuses to install on Python 3.13
+#      (default on Ubuntu 25.04 and other current distros).
+# Both are patched on the dewdad/apktriage fork, branch fix/packaging-python313.
+# Track upstream PR for merge status; when merged, switch back to gpamarthy/main.
+pipx install "git+https://github.com/dewdad/apktriage.git@fix/packaging-python313" \
+    || warn "apktriage install failed"
 
 # quark-engine — behavioral scoring
 pipx install quark-engine || warn "quark-engine install failed"

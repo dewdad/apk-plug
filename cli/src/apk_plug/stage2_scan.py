@@ -409,21 +409,27 @@ def run_apktriage(workspace: Workspace) -> bool:
         True if scan succeeded, False otherwise.
     """
     output_dir = workspace.scan_dir / "apktriage"
+    output_dir.mkdir(parents=True, exist_ok=True)
 
+    # Upstream CLI (gpamarthy/apktriage) requires a `scan` subcommand and uses
+    # `--out` to point at a directory. It emits report.json, report.md, and a
+    # generated YARA rule into that directory. `-f json` also emits JSON on
+    # stdout (we don't need it — the normalizer reads report.json from disk).
     try:
         run(
             [
-                "apktriage",
+                "apktriage", "scan",
                 str(workspace.target_apk),
                 "--out", str(output_dir),
+                "-f", "json",
             ],
             timeout=300.0,
         )
 
-        # apktriage outputs multiple files; consolidate to report.json
+        # Sanity: normalizer expects <scan>/apktriage/report.json to exist.
         report_file = output_dir / "report.json"
         if not report_file.exists():
-            # Try to find and rename the output
+            # Fall back to any *.json apktriage produced (defensive).
             for f in output_dir.glob("*.json"):
                 shutil.copy(f, report_file)
                 break

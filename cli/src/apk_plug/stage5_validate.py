@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING, TypedDict
 
@@ -234,11 +235,24 @@ def run_post_scan(workspace: Workspace, signed_apk: Path) -> dict[str, bool]:
         results["mobsfscan"] = False
 
     # Run apktriage
+    # Upstream CLI: `apktriage scan <apk> --out <dir> [-f json]`.
+    # It writes report.json / report.md / a YARA rule into --out.
+    # Postfix consumers (see test_verify.py) look for a flat `apktriage.json`
+    # in output_dir, so we surface the produced report.json under that name.
     try:
+        apktriage_dir = output_dir / "apktriage"
+        apktriage_dir.mkdir(parents=True, exist_ok=True)
         run(
-            ["apktriage", str(signed_apk), "--out", str(output_dir / "apktriage")],
+            [
+                "apktriage", "scan", str(signed_apk),
+                "--out", str(apktriage_dir),
+                "-f", "json",
+            ],
             timeout=300.0,
         )
+        produced = apktriage_dir / "report.json"
+        if produced.exists():
+            shutil.copy(produced, output_dir / "apktriage.json")
         results["apktriage"] = True
     except (ToolNotFoundError, ToolFailedError):
         results["apktriage"] = False
