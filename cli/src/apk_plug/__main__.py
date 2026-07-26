@@ -200,6 +200,12 @@ def cmd_validate(args: argparse.Namespace) -> int:
             for cmd in obb_cmds:
                 print(f"  {cmd}")
 
+        companion_warnings = results.get("companion_warnings", [])
+        if companion_warnings:
+            print("\nCompanion-data warnings (rebuilt universal APK cannot represent these):")
+            for warning in companion_warnings:
+                print(f"  ! {warning}")
+
         return 0 if results["passed"] else 1
 
     except ValidationError as e:

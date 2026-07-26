@@ -23,6 +23,7 @@ class Stage5Result(TypedDict):
     permission_diff: dict[str, list[str]]
     residual_c2: list[dict[str, str]]
     obb_commands: list[str]
+    companion_warnings: list[str]
 
 
 class ValidationError(Exception):
@@ -167,6 +168,47 @@ def generate_obb_push_commands(workspace: Workspace, package_name: str | None = 
     return commands
 
 
+def generate_companion_warnings(workspace: Workspace) -> list[str]:
+    """
+    Warn about companion data the rebuilt universal APK cannot represent.
+
+    The rebuild derives from the universal APK, so on-demand/conditional feature
+    modules (fusing=false) and non-install-time asset packs are NOT present in
+    the rebuilt artifact and cannot be exercised by a sideloaded smoke test
+    (there is no Play SplitInstallManager / AssetPackManager to fetch them).
+    Surfacing this prevents a false "app works" verdict.
+
+    Args:
+        workspace: The workspace to inspect.
+
+    Returns:
+        List of human-readable warning strings.
+    """
+    warnings: list[str] = []
+
+    for module in workspace.state.feature_modules:
+        if module.get("in_universal") is False:
+            name = module.get("name", "?")
+            warnings.append(
+                f"Feature module '{name}' (fusing=false) is absent from the "
+                f"rebuilt universal APK; its code cannot be remediated in-place "
+                f"and on-demand features depending on it will be unavailable when "
+                f"sideloaded."
+            )
+
+    for pack in workspace.state.asset_packs:
+        if pack.get("in_universal") is False:
+            name = pack.get("name", "?")
+            delivery = pack.get("delivery_type", "on-demand/fast-follow")
+            warnings.append(
+                f"Asset pack '{name}' ({delivery}) is not bundled into the "
+                f"rebuilt APK; the app will try to fetch it from Play at runtime "
+                f"and may fail or misbehave when sideloaded."
+            )
+
+    return warnings
+
+
 def run_post_scan(workspace: Workspace, signed_apk: Path) -> dict[str, bool]:
     """
     Run scanners on the rebuilt APK.
@@ -241,6 +283,7 @@ def run_stage5(workspace: Workspace) -> Stage5Result:
         "permission_diff": {},
         "residual_c2": [],
         "obb_commands": [],
+        "companion_warnings": [],
     }
 
     # Find signed APK
@@ -293,6 +336,12 @@ def run_stage5(workspace: Workspace) -> Stage5Result:
             logger.info("OBB files present - use these commands to push:")
             for cmd in obb_commands:
                 logger.info("  %s", cmd)
+
+    # Warn about companion data the rebuilt universal APK cannot represent.
+    companion_warnings = generate_companion_warnings(workspace)
+    results["companion_warnings"] = companion_warnings
+    for warning in companion_warnings:
+        logger.warning("%s", warning)
 
     # Write validation report
     validation_report = workspace.reports_postfix_dir / "validation-summary.json"

@@ -32,6 +32,40 @@ unzip -p build/app.apks universal.apk > input/target.apk
 apkeditor m -i input/app.xapk -o input/target.apk
 ```
 
+## AAB companion data — feature modules & asset packs (D15)
+
+`bundletool build-apks --mode=universal` produces the scannable/rebuildable
+`target.apk`, but the universal APK **silently drops** data the `.aab` carries:
+
+| Companion data in the `.aab` | In `universal.apk`? | Blind spot? |
+| --- | --- | --- |
+| base module, install-time DFMs (`dist:fusing dist:include="true"`), install-time asset packs, all ABI/density/language config splits | ✅ yes | no — scanned normally |
+| on-demand / conditional DFM with `dist:fusing dist:include="false"` → DEX + `.so` | ❌ **dropped** | 🔴 code invisible to the universal-APK scan |
+| fast-follow / on-demand PAD asset packs | ❌ **dropped** | 🔴 can smuggle DEX/ELF/scripts fetched post-install |
+
+Everything dropped is still physically present in the `.aab` (a plain ZIP), so
+`apk-plug init` **unzips the raw bundle into `input/aab-raw/`** and inventories
+every module:
+
+1. **Enumerate** each top-level module directory purely from ZIP structure
+   (`base` / feature / asset pack, and whether it ships `dex/`, `lib/`, `assets/`).
+2. **Refine delivery flags** (`dist:onDemand`, `dist:fusing`, asset-pack
+   `deliveryType`) via `bundletool dump manifest --module=<name>`. If bundletool
+   is unavailable the flags stay unknown and the module is scanned **anyway**
+   (conservative default — never a silent skip).
+3. **Record** feature modules and asset packs in workspace state with a computed
+   `in_universal` flag, and backfill the base module's `package_name` (used by the
+   Stage 5 OBB/asset push targets).
+
+Stage 2 (`apk-plug scan`) then scans each dropped module's `dex/`+`lib/` and each
+asset pack's `assets/` directly from `input/aab-raw/`. Stage 4's rebuild derives
+from the universal APK, so edits to a `fusing=false` module cannot be carried
+back — `apk-plug verify --stage 4` surfaces this as an advisory, and Stage 5 warns
+that such modules/packs are unavailable in the sideloaded rebuilt APK.
+
+> Classic OBB is **not** used by AABs (Play replaced it with Play Asset Delivery),
+> so the AAB path does no OBB extraction — that stays exclusive to XAPK/APKM.
+
 ## OBB expansion files (`.obb`)
 
 XAPK/APKM containers frequently bundle `.obb` expansion files. `apk-plug init`
@@ -51,4 +85,6 @@ OBB list so the Stage 5 push targets the correct `<pkg>`.
 ## Gate
 
 `apk-plug verify --stage 0` confirms a single normalized `input/target.apk`
-exists and any expansion files landed in `input/obb/`.
+exists, any expansion files landed in `input/obb/`, and (for `.aab` inputs) the
+raw bundle was preserved in `input/aab-raw/` with feature modules and asset packs
+recorded in workspace state.

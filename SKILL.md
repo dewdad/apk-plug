@@ -94,6 +94,12 @@ Route by format (detail + rationale in [stage0-input.md](references/stage0-input
 - Any bundled `.obb` expansion file → extracted to `input/obb/`. OBBs are both a
   malware-hiding surface (scanned in Stage 2) and a runtime dependency (pushed in
   Stage 5). Do not discard them.
+- `.aab` companion data → the raw bundle is unzipped to `input/aab-raw/` and its
+  feature modules + Play Asset Delivery asset packs are inventoried, because
+  `--mode=universal` DROPS on-demand/conditional feature modules (`fusing=false`)
+  and non-install-time asset packs. Those dropped surfaces are scan blind spots
+  (Stage 2 scans them directly) and cannot be carried through the rebuild (Stage
+  4/5 warn). bundletool-preferred flag reading, heuristic fallback when absent.
 
 `init` scaffolds a timestamped `workspace/<apk>_<ts>/` and records state so later
 subcommands are resumable and order-checked.
@@ -117,9 +123,11 @@ Gate: `apk-plug verify --stage 1` (valid manifest XML, ≥1 `.java`, ≥1 `.smal
 Runs every available scanner and **merges their heterogeneous outputs into one
 schema-validated `threat-report.json`** (the CLI centerpiece): MobSF, mobsfscan,
 semgrep + MASTG rules, apktriage, quark-engine, APKLeaks, APKiD, and Ghidra
-(native). Any `input/obb/*.obb` is unzipped and scanned for hidden DEX payloads.
-Full 8-scanner matrix, MobSF headless API, and OBB scan note in
-[stage2-scan.md](references/stage2-scan.md).
+(native). A companion-data pass scans every surface outside the target APK —
+`input/obb/*.obb`, AAB feature modules and asset packs dropped from the universal
+APK (`input/aab-raw/`), and DEX smuggled in the APK's own `assets/` — for hidden
+DEX/ELF payloads. Full 8-scanner matrix, MobSF headless API, and companion-data
+scan note in [stage2-scan.md](references/stage2-scan.md).
 
 The report carries: `components`, `urls`, `permissions`, `mitre_techniques`,
 per-tool `findings` with severity, and an `aggregate_risk` score.
@@ -173,8 +181,10 @@ Re-run mobsfscan/apktriage/quark on the rebuilt APK, diff permissions
 (original vs fixed — fail if broader), grep for residual C2 strings, and run
 optional Frida/Objection runtime checks. **If `input/obb/` is non-empty**, the
 smoke test must `adb push` each OBB to `Android/obb/<pkg>/` or the app crashes on
-launch (a false-negative). Detail in
-[stage5-validate.md](references/stage5-validate.md).
+launch (a false-negative). For `.aab` inputs, `validate` also warns that on-demand
+feature modules (`fusing=false`) and non-install-time asset packs are absent from
+the rebuilt universal APK — so a passing smoke test is not full coverage. Detail
+in [stage5-validate.md](references/stage5-validate.md).
 
 Gate: `apk-plug verify --stage 5` — but the true acceptance is a re-scan showing
 the threat gone AND the app still launching.

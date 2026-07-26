@@ -198,6 +198,9 @@
         "suspicious_permissions"
       ]
     },
+    "companion": {
+      "status": "not_run"
+    },
     "mobsf": {
       "status": "ran"
     },

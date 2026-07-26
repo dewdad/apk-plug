@@ -17,6 +17,183 @@ from apk_plug.runner import ToolFailedError, ToolNotFoundError, run
 
 logger = logging.getLogger(__name__)
 
+# File signatures used to detect payloads hidden under non-code extensions.
+_DEX_MAGIC = b"dex\n"
+_ELF_MAGIC = b"\x7fELF"
+
+
+def _file_magic(path: Path, n: int = 8) -> bytes:
+    """Read the first n bytes of a file, returning b'' on error."""
+    try:
+        with path.open("rb") as f:
+            return f.read(n)
+    except OSError:
+        return b""
+
+
+def find_embedded_payloads(root: Path) -> list[dict[str, str]]:
+    """
+    Recursively find DEX/ELF payloads under a directory.
+
+    Detects by BOTH extension and file magic, so a `.dex` renamed to `.png`
+    (a common evasion) is still caught.
+
+    Args:
+        root: Directory to scan.
+
+    Returns:
+        List of {"path": relative_path, "type": "dex"|"elf"} findings.
+    """
+    findings: list[dict[str, str]] = []
+    if not root.exists():
+        return findings
+
+    for path in root.rglob("*"):
+        if not path.is_file():
+            continue
+        magic = _file_magic(path)
+        rel = str(path.relative_to(root))
+        if path.suffix == ".dex" or magic.startswith(_DEX_MAGIC):
+            findings.append({"path": rel, "type": "dex"})
+        elif path.suffix == ".so" or magic.startswith(_ELF_MAGIC):
+            findings.append({"path": rel, "type": "elf"})
+
+    return findings
+
+
+def scan_apk_assets_for_dex(apk_path: Path) -> list[str]:
+    """
+    Detect DEX payloads smuggled inside an APK's assets/ directory.
+
+    jadx/apktool do not decompile DEX nested in assets/, so reflection /
+    DexClassLoader payloads there are a scan blind spot in every input format.
+
+    Args:
+        apk_path: Path to the APK (or universal target.apk).
+
+    Returns:
+        List of asset entry names that are DEX (by extension or magic).
+    """
+    dex_entries: list[str] = []
+    try:
+        with zipfile.ZipFile(apk_path, "r") as zf:
+            for name in zf.namelist():
+                if not name.startswith("assets/") or name.endswith("/"):
+                    continue
+                if name.endswith(".dex"):
+                    dex_entries.append(name)
+                    continue
+                try:
+                    with zf.open(name) as f:
+                        if f.read(4).startswith(_DEX_MAGIC):
+                            dex_entries.append(name)
+                except (OSError, zipfile.BadZipFile):
+                    continue
+    except zipfile.BadZipFile:
+        logger.debug("%s is not a zip archive", apk_path.name)
+
+    return dex_entries
+
+
+def scan_companion_artifacts(workspace: Workspace) -> list[dict[str, str]]:
+    """
+    Scan ALL companion data surfaces for hidden payloads and write a report.
+
+    Covers the blind spots that never reach the main jadx/apktool/scanner pass
+    because they live outside the universal/target APK:
+      - OBB expansion files (XAPK/APKM) — hidden DEX
+      - AAB dynamic feature modules dropped from the universal APK (fusing=false)
+      - Play Asset Delivery asset packs (fast-follow / on-demand) — DEX/ELF
+      - DEX smuggled inside the target APK's own assets/ directory
+
+    Writes scan/companion/report.json in the unified-findings shape so the
+    normalizer can fold it into threat-report.json.
+
+    Args:
+        workspace: The workspace to scan.
+
+    Returns:
+        List of finding dicts (rule, severity, description, category).
+    """
+    findings: list[dict[str, str]] = []
+
+    # 1. OBB expansion files (existing behavior, now routed into findings).
+    for obb_name, dex_files in scan_obb_files(workspace).items():
+        for dex in dex_files:
+            findings.append({
+                "rule": "dex_in_obb",
+                "severity": "high",
+                "description": f"Hidden DEX '{dex}' inside OBB '{obb_name}'",
+                "category": "companion_data",
+            })
+
+    # 2. AAB feature modules + asset packs preserved under input/aab-raw/.
+    raw_dir = workspace.aab_raw_dir
+    companion_modules = [
+        (m, "feature") for m in workspace.state.feature_modules
+    ] + [
+        (m, "asset_pack") for m in workspace.state.asset_packs
+    ]
+    for module, kind in companion_modules:
+        name = module.get("name", "")
+        module_root = raw_dir / name
+        payloads = find_embedded_payloads(module_root)
+        in_universal = module.get("in_universal")
+        dropped = in_universal is False
+
+        # A dropped module carrying code is itself a blind spot worth flagging,
+        # even before payload detection.
+        if dropped and (module.get("has_dex") or module.get("has_lib")):
+            findings.append({
+                "rule": "dropped_feature_module_with_code",
+                "severity": "high",
+                "description": (
+                    f"{kind} '{name}' is NOT in the universal APK "
+                    f"(in_universal=false) yet ships DEX/native code — invisible "
+                    f"to the main scan; analyzed from raw bundle"
+                ),
+                "category": "companion_data",
+            })
+
+        for payload in payloads:
+            # DEX/ELF in an asset pack, or in a non-fused module, is high risk.
+            severity = "high" if (kind == "asset_pack" or dropped) else "medium"
+            findings.append({
+                "rule": f"{payload['type']}_in_{kind}",
+                "severity": severity,
+                "description": (
+                    f"{payload['type'].upper()} payload '{payload['path']}' "
+                    f"in {kind} '{name}' (in_universal={in_universal})"
+                ),
+                "category": "companion_data",
+            })
+
+    # 3. DEX hidden inside the target APK's own assets/.
+    for entry in scan_apk_assets_for_dex(workspace.target_apk):
+        findings.append({
+            "rule": "dex_in_apk_assets",
+            "severity": "high",
+            "description": (
+                f"DEX payload '{entry}' inside APK assets/ — reflection / "
+                f"DexClassLoader vector, not decompiled by jadx/apktool"
+            ),
+            "category": "companion_data",
+        })
+
+    # Persist in the unified-findings shape for the normalizer.
+    report = {
+        "status": "ran",
+        "findings": findings,
+    }
+    report_path = workspace.scan_dir / "companion" / "report.json"
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(json.dumps(report, indent=2) + "\n")
+
+    if findings:
+        logger.warning("Companion-data scan found %d payload/blind-spot finding(s)", len(findings))
+
+    return findings
+
 
 def check_obb_for_dex(obb_path: Path) -> list[str]:
     """
@@ -374,14 +551,9 @@ def run_stage2(
     """
     workspace.require_stage("scan")
 
-    # Scan OBB files for hidden DEX
-    obb_dex = scan_obb_files(workspace)
-    if obb_dex:
-        logger.warning("Hidden DEX files found in OBB: %s", obb_dex)
-        # Record in apktriage output directory
-        obb_report = workspace.scan_dir / "apktriage" / "obb_dex.json"
-        obb_report.parent.mkdir(parents=True, exist_ok=True)
-        obb_report.write_text(json.dumps(obb_dex, indent=2))
+    # Scan every companion-data surface (OBB, dropped AAB feature modules,
+    # asset packs, and DEX-in-assets) for payloads the main scan cannot see.
+    scan_companion_artifacts(workspace)
 
     # Run scanners (graceful degradation - skip unavailable)
     run_mobsf_scan(workspace, api_key=mobsf_api_key)

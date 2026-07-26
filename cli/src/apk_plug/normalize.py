@@ -346,6 +346,12 @@ def calculate_aggregate_risk(
         score += 20
         drivers.append("packer_detected")
 
+    # Companion-data blind spots (payloads outside the universal/target APK)
+    companion_findings = all_findings.get("companion", [])
+    if any(f.get("severity") in ("critical", "high") for f in companion_findings):
+        score += 20
+        drivers.append("companion_data_payload")
+
     # Normalize to 0-100
     score = min(score, 100)
 
@@ -483,6 +489,16 @@ def normalize_scanner_outputs(
         all_mitre.extend(parsed.get("mitre_techniques", []))
     else:
         tools_data["apktriage"] = {"status": ToolStatus.NOT_RUN.value}
+
+    # Parse companion-data scan (OBB / dropped feature modules / asset packs /
+    # DEX-in-assets). Already emitted in the unified-findings shape by Stage 2.
+    companion_path = scan_dir / "companion" / "report.json"
+    companion_data = _safe_load_json(companion_path)
+    if companion_data:
+        tools_data["companion"] = {"status": ToolStatus.RAN.value}
+        all_findings["companion"] = companion_data.get("findings", [])
+    else:
+        tools_data["companion"] = {"status": ToolStatus.NOT_RUN.value}
 
     # Deduplicate
     all_urls = sorted(set(all_urls))

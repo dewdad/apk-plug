@@ -20,6 +20,7 @@ STATE_FILENAME: Final[str] = ".apk-plug-state.json"
 WORKSPACE_DIRS: Final[tuple[str, ...]] = (
     "input",
     "input/obb",
+    "input/aab-raw",
     "decompile/java",
     "decompile/smali",
     "decompile/native",
@@ -29,6 +30,7 @@ WORKSPACE_DIRS: Final[tuple[str, ...]] = (
     "scan/apktriage",
     "scan/quark",
     "scan/apkleaks",
+    "scan/companion",
     "patches",
     "build/unsigned",
     "build/aligned",
@@ -82,6 +84,11 @@ class WorkspaceState:
     apk_path: str
     package_name: str | None = None
     obb_files: list[str] = field(default_factory=list)
+    # Companion data carried OUTSIDE the universal/target APK (AAB dynamic feature
+    # modules and Play Asset Delivery asset packs). Each entry is a dict describing
+    # the artifact; see stage0_input.AabModule.to_state_dict() for the shape.
+    feature_modules: list[dict] = field(default_factory=list)
+    asset_packs: list[dict] = field(default_factory=list)
     completed_stages: list[str] = field(default_factory=list)
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     original_format: str = "apk"  # apk, aab, xapk, apkm, apks
@@ -110,6 +117,11 @@ class Workspace:
     @property
     def obb_dir(self) -> Path:
         return self.root / "input" / "obb"
+
+    @property
+    def aab_raw_dir(self) -> Path:
+        """Directory holding the unzipped raw .aab (base + feature + asset-pack modules)."""
+        return self.root / "input" / "aab-raw"
 
     @property
     def decompile_java_dir(self) -> Path:
@@ -166,6 +178,8 @@ class Workspace:
             "apk_path": self.state.apk_path,
             "package_name": self.state.package_name,
             "obb_files": self.state.obb_files,
+            "feature_modules": self.state.feature_modules,
+            "asset_packs": self.state.asset_packs,
             "completed_stages": self.state.completed_stages,
             "created_at": self.state.created_at,
             "original_format": self.state.original_format,
@@ -269,6 +283,8 @@ def load_workspace(workspace_path: Path) -> Workspace:
         apk_path=data["apk_path"],
         package_name=data.get("package_name"),
         obb_files=data.get("obb_files", []),
+        feature_modules=data.get("feature_modules", []),
+        asset_packs=data.get("asset_packs", []),
         completed_stages=data.get("completed_stages", []),
         created_at=data.get("created_at", ""),
         original_format=data.get("original_format", "apk"),

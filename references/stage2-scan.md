@@ -6,7 +6,7 @@
 - [Scanner matrix (8 tools)](#scanner-matrix-8-tools)
 - [MobSF headless API](#mobsf-headless-api)
 - [Source-level scanners on jadx output](#source-level-scanners-on-jadx-output)
-- [OBB scan note](#obb-scan-note)
+- [Companion-data scan (blind spots outside the target APK)](#companion-data-scan-blind-spots-outside-the-target-apk)
 - [Decision tree](#decision-tree)
 - [Unified output: threat-report.json](#unified-output-threat-reportjson)
 - [Verification gate](#verification-gate)
@@ -89,13 +89,23 @@ Exclude well-known libraries (semgrep `.semgrepignore`) to cut false positives.
 
 ---
 
-## OBB scan note
+## Companion-data scan (blind spots outside the target APK)
 
-Any `input/obb/*.obb` is unzipped and scanned for a **hidden `.dex` payload** —
-an OBB is a common malware-hiding surface (a `classes.dex` or secondary DEX
-smuggled inside an expansion file that the app loads at runtime). A DEX inside an
-OBB is flagged in the raw scan outputs and surfaced as a finding in
-`threat-report.json`.
+`apk-plug scan` scans every surface that never reaches the main
+jadx/apktool/scanner pass because it lives outside the universal/target APK.
+Results are written to `scan/companion/report.json` and folded into
+`threat-report.json` under the `companion` tool with a `companion_data` category;
+any high-severity hit adds a `companion_data_payload` risk driver.
+
+| Surface | What is flagged | Severity |
+| --- | --- | --- |
+| `input/obb/*.obb` (XAPK/APKM) | hidden `.dex` inside an expansion file | high |
+| `input/aab-raw/<feature>/` dropped from universal (`fusing=false`) | the module itself (ships DEX/`.so` yet invisible to the main scan) + any DEX/ELF payload | high |
+| `input/aab-raw/<asset_pack>/assets/` (fast-follow / on-demand) | DEX/ELF smuggled in a non-install-time asset pack | high |
+| `input/target.apk` `assets/**` | DEX smuggled in the APK's own `assets/` (reflection / `DexClassLoader`; not decompiled by jadx/apktool) | high |
+
+Detection is by **both file extension and file magic** (`dex\n`, `\x7fELF`), so a
+`.dex` renamed to `.png` inside an asset pack is still caught.
 
 ---
 

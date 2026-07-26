@@ -382,6 +382,39 @@ def verify_stage3(workspace: Workspace, deleted_classes: list[str] | None = None
     return VerificationResult(stage=3, passed=passed, checks=checks)
 
 
+def check_companion_rebuild_limitation(workspace: Workspace) -> GateCheck | None:
+    """
+    Surface (non-failing) that some companion modules cannot be represented.
+
+    The rebuilt APK derives from the universal APK, so on-demand/conditional
+    feature modules with fusing=false and non-install-time asset packs are not
+    present in the rebuild and any remediation to them is not carried through.
+    Returns a PASS check with an advisory message, or None if nothing applies.
+
+    Args:
+        workspace: The workspace to inspect.
+
+    Returns:
+        GateCheck advisory, or None when no companion module is dropped.
+    """
+    dropped = [
+        m.get("name", "?")
+        for m in (*workspace.state.feature_modules, *workspace.state.asset_packs)
+        if m.get("in_universal") is False
+    ]
+    if not dropped:
+        return None
+
+    return GateCheck(
+        name="companion_rebuild_coverage",
+        result=GateResult.PASS,
+        message=(
+            "Advisory: modules not in the universal APK are NOT in the rebuilt "
+            f"artifact and cannot be remediated in-place: {', '.join(dropped)}"
+        ),
+    )
+
+
 def verify_stage4(workspace: Workspace) -> VerificationResult:
     """
     Verify Stage 4 (rebuild) completed successfully.
@@ -389,6 +422,7 @@ def verify_stage4(workspace: Workspace) -> VerificationResult:
     Checks:
     - Signed APK exists
     - apksigner verify succeeds
+    - (advisory) companion modules dropped from the universal APK
 
     Args:
         workspace: The workspace to verify.
@@ -415,6 +449,11 @@ def verify_stage4(workspace: Workspace) -> VerificationResult:
 
         # Verify signature
         checks.append(check_apksigner_verify(signed_apks[0]))
+
+    # Advisory (never fails the gate): companion data the rebuild can't carry.
+    companion_check = check_companion_rebuild_limitation(workspace)
+    if companion_check is not None:
+        checks.append(companion_check)
 
     passed = all(c.result != GateResult.FAIL for c in checks)
 

@@ -57,6 +57,23 @@ adb push input/obb/main.<ver>.<pkg>.obb /sdcard/Android/obb/<pkg>/
 commands (and runs them when a device is attached) for every file in
 `input/obb/`, using the package name recorded in Stage 0.
 
+## Companion-data warnings (AAB — false "app works" guard)
+
+The rebuilt APK is a **universal** APK, so any AAB companion data that is not in
+the universal APK is also not in the rebuild:
+
+- **on-demand / conditional feature modules** (`fusing=false`) — their code is
+  absent from the rebuilt artifact; a remediation edit to such a module cannot be
+  carried through, and any feature depending on it will be unavailable when
+  sideloaded (no Play `SplitInstallManager` to fetch it).
+- **fast-follow / on-demand asset packs** — the sideloaded app tries to fetch
+  them from Play at runtime and may fail or misbehave.
+
+`apk-plug validate` emits a `companion_warnings` entry for each such module/pack
+(from workspace state) so a passing smoke test is not mistaken for full coverage.
+`apk-plug verify --stage 4` also surfaces the same limitation as a non-failing
+`companion_rebuild_coverage` advisory.
+
 ## Gate
 
 `apk-plug verify --stage 5` — but the true acceptance is: re-scan shows the
