@@ -95,9 +95,22 @@ def parse_mobsf(data: dict[str, Any]) -> dict[str, Any]:
                     "description": secret.get("description", str(secret)),
                 })
 
-    # Extract URLs from various fields
-    if "urls" in data:
-        result["urls"] = data["urls"] if isinstance(data["urls"], list) else []
+    # Extract URLs. MobSF's v1 API emits `urls` as a list of objects shaped
+    # {"urls": ["https://...", ...], "path": "src/File.java"} — NOT a flat list
+    # of strings. Flatten to strings so downstream set()-dedup never sees an
+    # unhashable dict. Tolerate the string-list and {"url": "..."} shapes too.
+    if "urls" in data and isinstance(data["urls"], list):
+        flat: list[str] = []
+        for entry in data["urls"]:
+            if isinstance(entry, str):
+                flat.append(entry)
+            elif isinstance(entry, dict):
+                inner = entry.get("urls")
+                if isinstance(inner, list):
+                    flat.extend(u for u in inner if isinstance(u, str))
+                elif isinstance(entry.get("url"), str):
+                    flat.append(entry["url"])
+        result["urls"] = flat
 
     # Extract exported components
     for comp_type in ["exported_activities", "exported_services", "exported_receivers", "exported_providers"]:
@@ -212,19 +225,35 @@ def parse_apkleaks(data: dict[str, Any]) -> dict[str, Any]:
         return result
 
     results = data["results"]
-    for category, items in results.items():
+
+    # Real apkleaks emits `results` as a LIST of {"name": <rule>, "matches": [...]}
+    # objects. (An older/dict shape — {category: [items]} — is also tolerated for
+    # back-compat with the golden fixture.) Normalize both into (category, items).
+    if isinstance(results, list):
+        pairs = [
+            (entry.get("name", "unknown"), entry.get("matches", []))
+            for entry in results
+            if isinstance(entry, dict)
+        ]
+    elif isinstance(results, dict):
+        pairs = list(results.items())
+    else:
+        return result
+
+    url_categories = ("URL", "URI", "ENDPOINT", "LINKFINDER", "LINK")
+    for category, items in pairs:
         if not isinstance(items, list):
             continue
 
-        if category.upper() in ("URL", "URI", "ENDPOINT"):
-            result["urls"].extend(items)
+        if str(category).upper() in url_categories:
+            result["urls"].extend(str(i).strip() for i in items if isinstance(i, str))
         else:
             for item in items:
                 result["findings"].append({
-                    "rule": f"apkleaks_{category.lower()}",
+                    "rule": f"apkleaks_{str(category).lower()}",
                     "severity": "medium",
-                    "description": str(item),
-                    "category": category,
+                    "description": str(item).strip(),
+                    "category": str(category),
                 })
 
     return result
@@ -383,6 +412,28 @@ def compute_sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+def _safe_parse(
+    name: str,
+    fn: Callable[[Any], dict[str, Any]],
+    data: Any,
+) -> dict[str, Any]:
+    """
+    Run a scanner-output parser defensively.
+
+    A parser that chokes on an unexpected real-world output shape must mark that
+    tool `error` and let the unified report still be produced — the same
+    never-hard-crash contract Stage 2 applies to the scanners themselves.
+    Regression: real MobSF `urls` (a list of dicts) and real apkleaks `results`
+    (a list, not a dict) each crashed a parser and aborted the whole report so
+    no threat-report.json was written.
+    """
+    try:
+        return fn(data)
+    except Exception as exc:  # noqa: BLE001 - heterogeneous external tool output
+        logger.warning("Parser %s failed on its output (marked error): %s", name, exc)
+        return {"status": ToolStatus.ERROR.value}
+
+
 def normalize_scanner_outputs(
     scan_dir: Path,
     apk_path: Path,
@@ -418,7 +469,7 @@ def normalize_scanner_outputs(
     mobsf_path = scan_dir / "mobsf" / "report.json"
     mobsf_data = _safe_load_json(mobsf_path)
     if mobsf_data:
-        parsed = parse_mobsf(mobsf_data)
+        parsed = _safe_parse("mobsf", parse_mobsf, mobsf_data)
         tools_data["mobsf"] = {"status": parsed["status"]}
         all_findings["mobsf"] = parsed.get("findings", [])
         all_permissions.extend(parsed.get("permissions", []))
@@ -431,12 +482,16 @@ def normalize_scanner_outputs(
     quark_path = scan_dir / "quark" / "report.json"
     quark_data = _safe_load_json(quark_path)
     if quark_data:
-        parsed = parse_quark(quark_data)
-        tools_data["quark"] = {
-            "status": parsed["status"],
-            "threat_level": parsed.get("threat_level"),
-            "total_score": parsed.get("total_score"),
-        }
+        parsed = _safe_parse("quark", parse_quark, quark_data)
+        # Omit threat_level/total_score when absent (e.g. the _safe_parse error
+        # default) so a null never reaches the schema (which types them
+        # string/integer).
+        quark_entry: dict[str, Any] = {"status": parsed["status"]}
+        if parsed.get("threat_level") is not None:
+            quark_entry["threat_level"] = parsed["threat_level"]
+        if parsed.get("total_score") is not None:
+            quark_entry["total_score"] = parsed["total_score"]
+        tools_data["quark"] = quark_entry
         all_findings["quark"] = parsed.get("findings", [])
     else:
         tools_data["quark"] = {"status": ToolStatus.NOT_RUN.value}
@@ -445,7 +500,7 @@ def normalize_scanner_outputs(
     semgrep_path = scan_dir / "semgrep" / "report.sarif"
     semgrep_data = _safe_load_json(semgrep_path)
     if semgrep_data:
-        parsed = parse_semgrep_sarif(semgrep_data)
+        parsed = _safe_parse("semgrep", parse_semgrep_sarif, semgrep_data)
         tools_data["semgrep"] = {"status": parsed["status"]}
         all_findings["semgrep"] = parsed.get("findings", [])
     else:
@@ -455,7 +510,7 @@ def normalize_scanner_outputs(
     apkleaks_path = scan_dir / "apkleaks" / "report.json"
     apkleaks_data = _safe_load_json(apkleaks_path)
     if apkleaks_data:
-        parsed = parse_apkleaks(apkleaks_data)
+        parsed = _safe_parse("apkleaks", parse_apkleaks, apkleaks_data)
         tools_data["apkleaks"] = {"status": parsed["status"]}
         all_findings["apkleaks"] = parsed.get("findings", [])
         all_urls.extend(parsed.get("urls", []))
@@ -466,7 +521,7 @@ def normalize_scanner_outputs(
     apkid_path = scan_dir / "apkid" / "report.txt"
     apkid_text = _safe_read_text(apkid_path)
     if apkid_text:
-        parsed = parse_apkid(apkid_text)
+        parsed = _safe_parse("apkid", parse_apkid, apkid_text)
         tools_data["apkid"] = {
             "status": parsed["status"],
             "packers": parsed.get("packers", []),
@@ -480,7 +535,7 @@ def normalize_scanner_outputs(
     apktriage_path = scan_dir / "apktriage" / "report.json"
     apktriage_data = _safe_load_json(apktriage_path)
     if apktriage_data:
-        parsed = parse_apktriage(apktriage_data)
+        parsed = _safe_parse("apktriage", parse_apktriage, apktriage_data)
         tools_data["apktriage"] = {
             "status": parsed["status"],
             "yara_matches": parsed.get("yara_matches", []),
@@ -500,9 +555,10 @@ def normalize_scanner_outputs(
     else:
         tools_data["companion"] = {"status": ToolStatus.NOT_RUN.value}
 
-    # Deduplicate
-    all_urls = sorted(set(all_urls))
-    all_permissions = sorted(set(all_permissions))
+    # Deduplicate. Guard against a scanner emitting a non-string (e.g. a dict):
+    # keep only hashable strings so report generation can never hard-crash here.
+    all_urls = sorted({u for u in all_urls if isinstance(u, str)})
+    all_permissions = sorted({p for p in all_permissions if isinstance(p, str)})
 
     # Calculate aggregate risk
     aggregate_risk = calculate_aggregate_risk(tools_data, all_findings)

@@ -30,6 +30,7 @@ WORKSPACE_DIRS: Final[tuple[str, ...]] = (
     "scan/apktriage",
     "scan/quark",
     "scan/apkleaks",
+    "scan/apkid",
     "scan/companion",
     "patches",
     "build/unsigned",

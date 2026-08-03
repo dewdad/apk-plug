@@ -1,0 +1,1308 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="auto">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>apk-plug · Threat Report Dashboard</title>
+<style>
+/* ============================ DESIGN TOKENS ============================ */
+:root{
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "Segoe UI Mono", Menlo, Consolas, monospace;
+  --radius: 10px; --radius-sm: 7px; --radius-lg: 16px;
+  --gap: 16px;
+  --maxw: 1180px;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.06), 0 1px 3px rgba(0,0,0,.05);
+  --shadow-md: 0 4px 12px rgba(0,0,0,.10);
+  --shadow-lg: 0 12px 34px rgba(0,0,0,.18);
+  --tr: 140ms ease;
+}
+/* Light theme (default) */
+[data-theme]{
+  --bg: #f4f6f9; --bg-grad: radial-gradient(1200px 600px at 80% -10%, #eaf0f8 0%, #f4f6f9 55%);
+  --surface: #ffffff; --surface-2: #f8fafc; --surface-3: #eef2f7;
+  --border: #e2e8f0; --border-strong: #cbd5e1;
+  --text: #0f172a; --text-2: #475569; --text-3: #94a3b8;
+  --accent: #2563eb; --accent-weak: #dbeafe; --accent-text:#1d4ed8;
+  --focus: #2563eb;
+  --sev-critical:#dc2626; --sev-critical-bg:#fef2f2; --sev-critical-bd:#fecaca;
+  --sev-high:#ea580c;     --sev-high-bg:#fff7ed;     --sev-high-bd:#fed7aa;
+  --sev-medium:#b45309;   --sev-medium-bg:#fffbeb;   --sev-medium-bd:#fde68a;
+  --sev-low:#2563eb;      --sev-low-bg:#eff6ff;      --sev-low-bd:#bfdbfe;
+  --sev-info:#64748b;     --sev-info-bg:#f1f5f9;     --sev-info-bd:#e2e8f0;
+  --lvl-low:#16a34a; --lvl-medium:#d97706; --lvl-high:#ea580c; --lvl-critical:#dc2626;
+  --ok:#16a34a; --ok-bg:#f0fdf4; --ok-bd:#bbf7d0;
+  --warn:#d97706; --err:#dc2626; --err-bg:#fef2f2; --grey:#94a3b8; --grey-bg:#f1f5f9;
+  --track:#e2e8f0;
+}
+[data-theme="dark"]{
+  --bg:#0b1120; --bg-grad: radial-gradient(1100px 600px at 82% -12%, #16233d 0%, #0b1120 60%);
+  --surface:#111a2e; --surface-2:#0e1626; --surface-3:#1a2740;
+  --border:#243352; --border-strong:#31456b;
+  --text:#e6edf7; --text-2:#9fb0c9; --text-3:#647495;
+  --accent:#60a5fa; --accent-weak:#17233c; --accent-text:#93c5fd;
+  --focus:#60a5fa;
+  --sev-critical:#f87171; --sev-critical-bg:#2a1416; --sev-critical-bd:#5b2326;
+  --sev-high:#fb923c;     --sev-high-bg:#2a1a10;     --sev-high-bd:#5c3418;
+  --sev-medium:#fbbf24;   --sev-medium-bg:#2a2210;   --sev-medium-bd:#5c4a18;
+  --sev-low:#60a5fa;      --sev-low-bg:#12203a;      --sev-low-bd:#294067;
+  --sev-info:#94a3b8;     --sev-info-bg:#182236;     --sev-info-bd:#2a3b5c;
+  --lvl-low:#22c55e; --lvl-medium:#fbbf24; --lvl-high:#fb923c; --lvl-critical:#f87171;
+  --ok:#22c55e; --ok-bg:#0f2418; --ok-bd:#1f5236;
+  --warn:#fbbf24; --err:#f87171; --err-bg:#2a1416; --grey:#647495; --grey-bg:#182236;
+  --track:#243352;
+}
+@media (prefers-color-scheme: dark){
+  [data-theme="auto"]{
+    --bg:#0b1120; --bg-grad: radial-gradient(1100px 600px at 82% -12%, #16233d 0%, #0b1120 60%);
+    --surface:#111a2e; --surface-2:#0e1626; --surface-3:#1a2740;
+    --border:#243352; --border-strong:#31456b;
+    --text:#e6edf7; --text-2:#9fb0c9; --text-3:#647495;
+    --accent:#60a5fa; --accent-weak:#17233c; --accent-text:#93c5fd; --focus:#60a5fa;
+    --sev-critical:#f87171; --sev-critical-bg:#2a1416; --sev-critical-bd:#5b2326;
+    --sev-high:#fb923c; --sev-high-bg:#2a1a10; --sev-high-bd:#5c3418;
+    --sev-medium:#fbbf24; --sev-medium-bg:#2a2210; --sev-medium-bd:#5c4a18;
+    --sev-low:#60a5fa; --sev-low-bg:#12203a; --sev-low-bd:#294067;
+    --sev-info:#94a3b8; --sev-info-bg:#182236; --sev-info-bd:#2a3b5c;
+    --lvl-low:#22c55e; --lvl-medium:#fbbf24; --lvl-high:#fb923c; --lvl-critical:#f87171;
+    --ok:#22c55e; --ok-bg:#0f2418; --ok-bd:#1f5236;
+    --warn:#fbbf24; --err:#f87171; --err-bg:#2a1416; --grey:#647495; --grey-bg:#182236; --track:#243352;
+  }
+}
+/* ============================ BASE ============================ */
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  font-family:var(--font-sans); background:var(--bg); background-image:var(--bg-grad);
+  color:var(--text); line-height:1.5; font-size:15px; min-height:100vh;
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+}
+h1,h2,h3,h4{margin:0;font-weight:650;letter-spacing:-.01em;line-height:1.25}
+a{color:var(--accent-text);text-decoration:none}
+a:hover{text-decoration:underline}
+:focus-visible{outline:2.5px solid var(--focus);outline-offset:2px;border-radius:4px}
+button{font-family:inherit;font-size:inherit;cursor:pointer}
+code,.mono{font-family:var(--font-mono)}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0}
+/* ============================ LAYOUT ============================ */
+.wrap{max-width:var(--maxw);margin:0 auto;padding:0 20px}
+header.topbar{
+  position:sticky;top:0;z-index:40;background:color-mix(in srgb,var(--surface) 88%, transparent);
+  backdrop-filter:saturate(1.4) blur(10px);border-bottom:1px solid var(--border);
+}
+.topbar-inner{display:flex;align-items:center;gap:14px;padding:11px 20px;max-width:var(--maxw);margin:0 auto;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:-.02em;font-size:16px;color:var(--text)}
+.brand .logo{width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,var(--accent),#7c3aed);
+  display:grid;place-items:center;color:#fff;font-weight:800;font-size:13px;box-shadow:var(--shadow-sm)}
+.brand small{color:var(--text-3);font-weight:500;font-size:12px}
+.topbar-spacer{flex:1 1 auto}
+.btn{
+  display:inline-flex;align-items:center;gap:7px;border:1px solid var(--border-strong);
+  background:var(--surface);color:var(--text);padding:7px 12px;border-radius:var(--radius-sm);
+  font-size:13.5px;font-weight:550;transition:var(--tr);white-space:nowrap;box-shadow:var(--shadow-sm)
+}
+.btn:hover{background:var(--surface-2);border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{filter:brightness(1.06)}
+.btn.ghost{background:transparent;border-color:transparent;box-shadow:none}
+.btn.ghost:hover{background:var(--surface-2)}
+.btn .ic{width:16px;height:16px;display:inline-block}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.tab{
+  border:1px solid var(--border);background:var(--surface-2);color:var(--text-2);
+  padding:6px 12px;border-radius:999px;font-size:13px;font-weight:550;transition:var(--tr);max-width:230px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap
+}
+.tab[aria-selected="true"]{background:var(--accent);color:#fff;border-color:var(--accent)}
+.tab:hover:not([aria-selected="true"]){border-color:var(--accent);color:var(--text)}
+.tab .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle}
+main{padding:26px 0 80px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm)}
+.section{margin-top:22px}
+.section-head{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+.section-head h2{font-size:18px}
+.section-head .count{color:var(--text-3);font-size:13px;font-weight:600;background:var(--surface-3);
+  padding:2px 9px;border-radius:999px;border:1px solid var(--border)}
+.muted{color:var(--text-2)}
+.tiny{font-size:12.5px}
+.empty-note{color:var(--text-3);font-style:italic;padding:14px 16px;font-size:13.5px}
+/* ============================ PILLS / BADGES ============================ */
+.pill{display:inline-flex;align-items:center;gap:5px;padding:2px 9px;border-radius:999px;font-size:12px;
+  font-weight:650;border:1px solid transparent;line-height:1.7;white-space:nowrap}
+.sev-critical{color:var(--sev-critical);background:var(--sev-critical-bg);border-color:var(--sev-critical-bd)}
+.sev-high{color:var(--sev-high);background:var(--sev-high-bg);border-color:var(--sev-high-bd)}
+.sev-medium{color:var(--sev-medium);background:var(--sev-medium-bg);border-color:var(--sev-medium-bd)}
+.sev-low{color:var(--sev-low);background:var(--sev-low-bg);border-color:var(--sev-low-bd)}
+.sev-info{color:var(--sev-info);background:var(--sev-info-bg);border-color:var(--sev-info-bd)}
+.status-ran{color:var(--ok);background:var(--ok-bg);border-color:var(--ok-bd)}
+.status-not_run{color:var(--text-2);background:var(--grey-bg);border-color:var(--border)}
+.status-error{color:var(--err);background:var(--err-bg);border-color:var(--sev-critical-bd)}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;background:var(--surface-2);
+  border:1px solid var(--border);font-size:12.5px;font-weight:550;color:var(--text);cursor:default}
+.chip.link{cursor:pointer}
+.chip.link:hover{border-color:var(--accent);background:var(--accent-weak)}
+.chip.danger{background:var(--sev-high-bg);border-color:var(--sev-high-bd);color:var(--sev-high)}
+.tip{border-bottom:1px dotted var(--text-3);cursor:help}
+/* ============================ HERO / GAUGE ============================ */
+.hero{display:grid;grid-template-columns:minmax(220px,260px) 1fr;gap:24px;padding:22px 24px;align-items:center}
+.gauge-wrap{display:flex;flex-direction:column;align-items:center;gap:8px}
+.gauge{position:relative;width:200px;height:200px}
+.gauge svg{transform:rotate(-90deg)}
+.gauge .num{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.gauge .num b{font-size:46px;font-weight:750;letter-spacing:-.03em;line-height:1}
+.gauge .num span{font-size:12px;color:var(--text-3);font-weight:600;margin-top:2px}
+.lvl-badge{padding:5px 14px;border-radius:999px;font-weight:700;font-size:13px;letter-spacing:.02em;text-transform:uppercase;border:1px solid}
+.lvl-low{color:var(--lvl-low);background:var(--ok-bg);border-color:var(--lvl-low)}
+.lvl-medium{color:var(--lvl-medium);background:var(--sev-medium-bg);border-color:var(--lvl-medium)}
+.lvl-high{color:var(--lvl-high);background:var(--sev-high-bg);border-color:var(--lvl-high)}
+.lvl-critical{color:var(--lvl-critical);background:var(--sev-critical-bg);border-color:var(--lvl-critical)}
+.hero-right h3{font-size:14px;color:var(--text-2);text-transform:uppercase;letter-spacing:.05em;font-weight:650;margin-bottom:8px}
+.drivers{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.calc{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:0;overflow:hidden}
+.calc table{width:100%;border-collapse:collapse;font-size:13px}
+.calc th,.calc td{padding:7px 12px;text-align:left;border-bottom:1px solid var(--border)}
+.calc th{color:var(--text-3);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;background:var(--surface-3)}
+.calc td.num,.calc th.num{text-align:right;font-variant-numeric:tabular-nums;font-family:var(--font-mono)}
+.calc tr:last-child td{border-bottom:none}
+.calc tr.total td{font-weight:750;background:var(--surface-3)}
+.calc .cap-note{padding:8px 12px;font-size:12px;color:var(--text-2);background:var(--surface-3);border-top:1px solid var(--border)}
+.mismatch{color:var(--warn);font-weight:600}
+/* ============================ HEADER META ============================ */
+.meta-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:2px;background:var(--border);border-radius:var(--radius);overflow:hidden}
+.meta-cell{background:var(--surface);padding:13px 16px}
+.meta-cell .k{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-3);font-weight:650;margin-bottom:3px}
+.meta-cell .v{font-size:14px;font-weight:550;word-break:break-all}
+.copyable{display:inline-flex;align-items:center;gap:6px}
+.copybtn{border:1px solid var(--border);background:var(--surface-2);border-radius:6px;padding:1px 7px;font-size:11px;color:var(--text-2);font-weight:600}
+.copybtn:hover{border-color:var(--accent);color:var(--accent-text)}
+.copybtn.done{color:var(--ok);border-color:var(--ok-bd)}
+/* ============================ SCANNER MATRIX ============================ */
+.tool-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
+.tool{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:13px 14px;transition:var(--tr)}
+.tool:hover{border-color:var(--border-strong)}
+.tool .th{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+.tool .name{font-weight:650;font-size:14px}
+.tool .blurb{font-size:12px;color:var(--text-2);line-height:1.45}
+.tool .extra{margin-top:9px;display:flex;flex-wrap:wrap;gap:6px}
+.tool .extra .lbl{font-size:11px;color:var(--text-3);font-weight:650;text-transform:uppercase;letter-spacing:.03em;width:100%}
+/* ============================ FINDINGS ============================ */
+.controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.search{flex:1 1 240px;min-width:180px;display:flex;align-items:center;gap:8px;background:var(--surface);
+  border:1px solid var(--border-strong);border-radius:var(--radius-sm);padding:7px 11px}
+.search input{border:none;background:transparent;color:var(--text);flex:1;font-size:14px;outline:none}
+.search .ic{width:16px;height:16px;color:var(--text-3);flex:none}
+.select-wrap{position:relative}
+.filter-menu{position:absolute;z-index:20;top:calc(100% + 6px);left:0;min-width:210px;background:var(--surface);
+  border:1px solid var(--border-strong);border-radius:var(--radius-sm);box-shadow:var(--shadow-lg);padding:8px;display:none}
+.filter-menu.open{display:block}
+.filter-menu label{display:flex;align-items:center;gap:9px;padding:6px 8px;border-radius:6px;font-size:13.5px;cursor:pointer}
+.filter-menu label:hover{background:var(--surface-2)}
+.filter-menu input{accent-color:var(--accent);width:15px;height:15px}
+.seg{display:inline-flex;border:1px solid var(--border-strong);border-radius:var(--radius-sm);overflow:hidden}
+.seg button{background:var(--surface);border:none;padding:7px 12px;font-size:13px;color:var(--text-2);font-weight:550;border-right:1px solid var(--border)}
+.seg button:last-child{border-right:none}
+.seg button[aria-pressed="true"]{background:var(--accent);color:#fff}
+.sevbar{display:flex;gap:0;height:9px;border-radius:999px;overflow:hidden;border:1px solid var(--border);margin-bottom:14px;background:var(--track)}
+.sevbar i{display:block;height:100%}
+.sevbar i.critical{background:var(--sev-critical)} .sevbar i.high{background:var(--sev-high)}
+.sevbar i.medium{background:var(--sev-medium)} .sevbar i.low{background:var(--sev-low)} .sevbar i.info{background:var(--sev-info)}
+.sevlegend{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:12px;font-size:12.5px;color:var(--text-2)}
+.sevlegend b{font-variant-numeric:tabular-nums}
+.f-table{width:100%;border-collapse:collapse;font-size:13.5px}
+.f-table th{position:sticky;top:56px;background:var(--surface-3);text-align:left;padding:9px 12px;font-size:11.5px;
+  text-transform:uppercase;letter-spacing:.04em;color:var(--text-2);font-weight:650;border-bottom:1px solid var(--border);z-index:5;cursor:pointer;user-select:none}
+.f-table th .arrow{opacity:.4;font-size:10px}
+.f-table th.active .arrow{opacity:1;color:var(--accent-text)}
+.f-table td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:top}
+.f-table tr:hover td{background:var(--surface-2)}
+.f-rule{font-weight:600;color:var(--text)}
+.f-rule .full{display:block;font-size:11px;color:var(--text-3);font-family:var(--font-mono);word-break:break-all;margin-top:2px;font-weight:400}
+.f-desc{color:var(--text-2);max-width:520px}
+.f-loc{font-family:var(--font-mono);font-size:11.5px;color:var(--text-3);word-break:break-all}
+.f-tool{font-size:12px;font-weight:600;color:var(--text-2)}
+.f-cat{font-size:11.5px;color:var(--text-3)}
+.showmore{display:flex;justify-content:center;padding:16px}
+.tbl-scroll{overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface)}
+/* ============================ URLS ============================ */
+.url-list{list-style:none;margin:0;padding:0;max-height:460px;overflow:auto;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface)}
+.url-list li{padding:7px 14px;border-bottom:1px solid var(--border);font-family:var(--font-mono);font-size:12.5px;
+  word-break:break-all;display:flex;gap:8px;align-items:baseline}
+.url-list li:last-child{border-bottom:none}
+.url-list li.noise{opacity:.7;background:var(--surface-2)}
+.url-flag{flex:none;font-size:10.5px;font-weight:700;padding:1px 6px;border-radius:5px;font-family:var(--font-sans);text-transform:uppercase;letter-spacing:.03em}
+.flag-c2{background:var(--sev-critical-bg);color:var(--sev-critical);border:1px solid var(--sev-critical-bd)}
+.flag-noise{background:var(--grey-bg);color:var(--text-3);border:1px solid var(--border)}
+/* ============================ PERMISSIONS ============================ */
+.perm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px}
+.perm{display:flex;flex-direction:column;gap:2px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface)}
+.perm.danger{border-color:var(--sev-high-bd);background:var(--sev-high-bg)}
+.perm .pn{font-family:var(--font-mono);font-size:12px;word-break:break-all;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.perm .pr{font-size:12px;color:var(--sev-high);font-weight:550}
+/* ============================ COMPARE ============================ */
+.cmp-scroll{overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface)}
+.cmp{border-collapse:collapse;width:100%;font-size:13px;min-width:640px}
+.cmp th,.cmp td{padding:10px 13px;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap}
+.cmp thead th{background:var(--surface-3);position:sticky;top:56px;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-2)}
+.cmp tbody th{font-weight:600;color:var(--text);background:var(--surface-2);position:sticky;left:0;text-align:left}
+.cmp td.center{text-align:center}
+.cmp .mini{display:inline-flex;gap:4px}
+.cmp .mini .pill{padding:1px 6px;font-size:11px}
+/* ============================ DROPZONE / EMPTY ============================ */
+#dropzone{position:fixed;inset:0;z-index:60;background:color-mix(in srgb,var(--accent) 12%, var(--bg));display:none;
+  align-items:center;justify-content:center;border:4px dashed var(--accent);}
+#dropzone.show{display:flex}
+#dropzone .msg{font-size:22px;font-weight:700;color:var(--accent-text)}
+.empty{max-width:620px;margin:60px auto;text-align:center;padding:44px 30px}
+.empty .big{width:64px;height:64px;margin:0 auto 18px;color:var(--accent)}
+.empty h2{font-size:24px;margin-bottom:10px}
+.empty p{color:var(--text-2);margin:0 auto 22px;max-width:460px}
+.empty .actions{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.empty .hint{margin-top:22px;font-size:12.5px;color:var(--text-3)}
+.load-err{color:var(--err);background:var(--err-bg);border:1px solid var(--sev-critical-bd);border-radius:var(--radius-sm);padding:10px 14px;margin-top:16px;font-size:13px}
+/* ============================ GLOSSARY SLIDE-OVER ============================ */
+#scrim{position:fixed;inset:0;background:rgba(2,6,23,.5);z-index:70;opacity:0;visibility:hidden;transition:var(--tr)}
+#scrim.open{opacity:1;visibility:visible}
+#glossary{position:fixed;top:0;right:0;height:100%;width:min(560px,92vw);background:var(--surface);z-index:71;
+  transform:translateX(100%);transition:transform 200ms ease;box-shadow:var(--shadow-lg);display:flex;flex-direction:column}
+#glossary.open{transform:translateX(0)}
+#glossary .gh{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border)}
+#glossary .gh h2{font-size:18px}
+#glossary .gbody{overflow:auto;padding:6px 20px 40px}
+.gsec{margin-top:22px}
+.gsec > h3{font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:var(--accent-text);font-weight:700;margin-bottom:10px;
+  padding-bottom:6px;border-bottom:1px solid var(--border)}
+.gitem{margin-bottom:12px}
+.gitem .t{font-weight:650;font-size:14px}
+.gitem .t .pill{margin-left:6px}
+.gitem .d{font-size:13px;color:var(--text-2);margin-top:2px}
+.gitem .rem{font-size:12.5px;color:var(--text);background:var(--surface-2);border-left:3px solid var(--accent);padding:5px 10px;margin-top:5px;border-radius:0 6px 6px 0}
+.tree{list-style:none;padding:0;margin:0;counter-reset:step}
+.tree li{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:8px;font-size:13px}
+.tree li b{color:var(--text)}
+.reflist{list-style:none;padding:0;margin:0}
+.reflist li{padding:5px 0}
+.close-x{border:1px solid var(--border);background:var(--surface-2);width:34px;height:34px;border-radius:8px;display:grid;place-items:center;color:var(--text-2)}
+.close-x:hover{border-color:var(--accent);color:var(--accent-text)}
+/* toast */
+#toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--text);color:var(--bg);
+  padding:9px 18px;border-radius:999px;font-size:13px;font-weight:600;opacity:0;transition:var(--tr);z-index:90;pointer-events:none}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+/* ============================ RESPONSIVE ============================ */
+@media(max-width:760px){
+  .hero{grid-template-columns:1fr;text-align:center}
+  .gauge-wrap{margin:0 auto}
+  .drivers{justify-content:center}
+  .f-table .col-loc,.f-table .col-cat{display:none}
+  .brand small{display:none}
+}
+/* ============================ PRINT ============================ */
+@media print{
+  body{background:#fff;background-image:none;font-size:11.5px;color:#000}
+  header.topbar,.controls,.showmore,#dropzone,#scrim,#glossary,#toast,.no-print,.copybtn,.filter-menu{display:none !important}
+  .card,.tool,.perm{box-shadow:none;border-color:#bbb}
+  .url-list{max-height:none;overflow:visible}
+  .f-table th{position:static}
+  main{padding:0}
+  .section{break-inside:avoid}
+  a{color:#000;text-decoration:underline}
+  .gauge svg circle{stroke:#444 !important}
+}
+</style>
+</head>
+<body>
+<div id="dropzone" aria-hidden="true"><div class="msg">Drop threat-report.json to load</div></div>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">A</span>
+      <span>apk-plug <small>threat dashboard</small></span>
+    </div>
+    <nav class="tabs" id="reportTabs" aria-label="Loaded reports"></nav>
+    <div class="topbar-spacer"></div>
+    <button class="btn ghost" id="btnGlossary" aria-haspopup="dialog">
+      <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 6.5A2.5 2.5 0 0 1 14.5 4H20v14h-5.5A2.5 2.5 0 0 0 12 20.5m0-14A2.5 2.5 0 0 0 9.5 4H4v14h5.5A2.5 2.5 0 0 1 12 20.5m0-14v14"/></svg>
+      Glossary
+    </button>
+    <button class="btn ghost" id="btnTheme" aria-label="Toggle color theme" title="Toggle theme">
+      <svg class="ic" id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+    </button>
+    <label class="btn" id="btnFile">
+      <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+      Load file
+      <input type="file" id="fileInput" accept=".json,application/json" multiple hidden>
+    </label>
+  </div>
+</header>
+
+<main>
+  <div class="wrap" id="app"></div>
+</main>
+
+<div id="scrim"></div>
+<aside id="glossary" role="dialog" aria-modal="true" aria-labelledby="glossaryTitle" tabindex="-1">
+  <div class="gh"><h2 id="glossaryTitle">Threat glossary &amp; references</h2>
+    <button class="close-x" id="btnCloseGlossary" aria-label="Close glossary">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
+  </div>
+  <div class="gbody" id="glossaryBody"></div>
+</aside>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+"use strict";
+/* =====================================================================
+   apk-plug threat dashboard — self-contained, offline, zero-dependency.
+   ===================================================================== */
+
+/* ---------- constants ---------- */
+var SEV_ORDER = { critical:0, high:1, medium:2, low:3, info:4 };
+var SEV_LABEL = { critical:"Critical", high:"High", medium:"Medium", low:"Low", info:"Info" };
+var SEV_LIST  = ["critical","high","medium","low","info"];
+var SEV_WEIGHT = { critical:25, high:15, medium:5, low:1, info:0 };
+var DRIVER_BONUS = { quark_high_threat:30, quark_score_80plus:20, packer_detected:20, companion_data_payload:20 };
+var TOOLS = ["mobsf","mobsfscan","semgrep","apktriage","quark","apkleaks","apkid","companion"];
+var SAMPLE_FILES = [
+  "./sample-reports/agc.threat-report.json",
+  "./sample-reports/duolingo-mod.threat-report.json",
+  "./sample-reports/duolingo-xapk.threat-report.json"
+];
+
+/* ---------- KNOWLEDGE BASE (all human descriptions live here) ---------- */
+var KNOWLEDGE_BASE = {
+  scanners: {
+    mobsf:     { name:"MobSF",     blurb:"Backbone static analyzer — permissions, manifest analysis, hardcoded secrets, trackers, malware indicators and extracted URLs." },
+    mobsfscan: { name:"mobsfscan", blurb:"OWASP MASVS source-pattern SAST run over the decompiled Java/Kotlin." },
+    semgrep:   { name:"semgrep",   blurb:"Taint & pattern SAST with the MASTG ruleset, mapping findings to MASVS/MASTG tests (STORAGE, CRYPTO, AUTH, NETWORK, PLATFORM, CODE, RESILIENCE)." },
+    apktriage: { name:"apktriage", blurb:"Offline YARA signatures + MITRE ATT&CK mapping, bundling APKiD fingerprinting." },
+    quark:     { name:"quark-engine", blurb:"Behavioral malware scoring 0-100 (threat_level / total_score). The primary malware-confidence signal in the pipeline." },
+    apkleaks:  { name:"APKLeaks",  blurb:"Extracts hardcoded URIs, endpoints, secrets and IP addresses (IOCs) baked into the app." },
+    apkid:     { name:"APKiD",     blurb:"Packer / obfuscator / compiler fingerprinting — \u201cPEiD for Android\u201d." },
+    companion: { name:"companion", blurb:"Scans surfaces OUTSIDE the main APK: OBB expansion files, AAB feature modules / asset packs, and DEX/ELF smuggled inside assets/ — blind spots invisible to jadx/apktool." }
+  },
+  severities: {
+    critical:{ desc:"Confirmed or near-confirmed malicious behaviour, or a severe exploitable issue. Act immediately." },
+    high:    { desc:"Strong risk that needs action / manual review." },
+    medium:  { desc:"Notable finding worth reviewing." },
+    low:     { desc:"Minor issue or hygiene item." },
+    info:    { desc:"Contextual information, not a risk on its own." }
+  },
+  drivers: {
+    quark_high_threat:      { label:"Quark high threat", bonus:30, desc:"quark-engine flagged a high / dangerous behavioural threat level." },
+    quark_score_80plus:     { label:"Quark score \u2265 80", bonus:20, desc:"quark-engine behavioural score \u2265 80 — a strong malware signal." },
+    packer_detected:        { label:"Packer detected", bonus:20, desc:"APKiD found a runtime packer/protector; the real code is hidden until unpacked." },
+    companion_data_payload: { label:"Companion payload", bonus:20, desc:"A high-severity payload / blind-spot was found OUTSIDE the main APK (OBB, feature module, asset pack, or DEX in assets/)." }
+  },
+  ruleFamilies: {
+    obfuscator_detected: { title:"Obfuscator detected",
+      desc:"Code obfuscation (renamed classes/fields/methods). Common in commercial apps and NOT inherently malicious, but it hinders review.",
+      rem:"Note it and proceed; obfuscation alone is not a verdict." },
+    packer_detected: { title:"Packer detected",
+      desc:"A runtime unpacker/protector (e.g. Bangcle, Jiagu, 360). The real code is decrypted only at runtime.",
+      rem:"UNPACK first (FRIDA-DEXDump / BlackDex), then re-run decompile + scan." },
+    hardcoded_secret: { title:"Hardcoded secret",
+      desc:"A credential/token/key baked into the app binary.",
+      rem:"Rotate the secret and verify it isn't a live key." },
+    malicious_code: { title:"Malicious code (MobSF)",
+      desc:"MobSF flagged code it considers likely-malicious.",
+      rem:"Treat as high; open the flagged component in jadx and confirm before acting." },
+    dex_in_apk_assets: { title:"DEX hidden in assets/",
+      desc:"A secondary DEX inside assets/, loaded via reflection / DexClassLoader — not seen by normal decompilers. Often a legitimate SDK (e.g. Facebook Audience Network audience_network.dex) but it is an evasion-capable vector.",
+      rem:"Extract and decompile the DEX; review what it loads before clearing it." },
+    dropped_feature_module_with_code: { title:"Feature module with code",
+      desc:"Executable code shipped in an AAB feature module that the universal APK drops at install/runtime — a scan blind spot.",
+      rem:"Scan the dropped module separately." },
+    dex_in_asset_pack: { title:"DEX in asset pack",
+      desc:"A DEX shipped inside a Play asset pack, outside the main APK.",
+      rem:"Extract and scan the asset pack contents." },
+    elf_in_feature: { title:"Native ELF in feature module",
+      desc:"A native .so/ELF binary carried in a feature module — outside the main APK analysis surface.",
+      rem:"Analyse the native library separately." },
+    apkleaks_ip_address: { title:"Hardcoded IP address",
+      desc:"An IP literal embedded in the app. Possible C2 endpoint if paired with suspicious behaviour.",
+      rem:"Check the IP's reputation and whether traffic to it is expected." },
+    apkleaks_authorization_basic: { title:"Embedded Basic-auth credentials",
+      desc:"HTTP Basic authorization credentials found in the binary.",
+      rem:"Rotate immediately; never ship Basic-auth creds in an app." },
+    apkleaks_generic: { title:"Leaked secret / IOC (APKLeaks)",
+      desc:"APKLeaks extracted a hardcoded token, key or indicator from the app.",
+      rem:"Confirm it is live, rotate if so, and treat as an IOC." }
+  },
+  mstg: {
+    STORAGE:    "Data storage & privacy — how sensitive data is stored, logged, cached or backed up.",
+    CRYPTO:     "Cryptography — key management and correct, non-broken cryptographic primitives.",
+    AUTH:       "Authentication & session management.",
+    NETWORK:    "Network communication — TLS, cert validation, cleartext traffic.",
+    PLATFORM:   "Platform interaction — permissions, IPC, WebViews, exported components.",
+    CODE:       "Code quality & build settings — debuggable flags, injection, memory safety.",
+    RESILIENCE: "Resilience against reverse-engineering & tampering (root/debugger detection, obfuscation)."
+  },
+  remediationTree: [
+    "Quark score \u2265 80 <b>OR</b> MobSF flags \u201cmalicious\u201d \u2192 <b>confirmed malware</b>: neutralize the offending component or discard the app.",
+    "Quark 40\u201379 <b>OR</b> suspicious permissions + hardcoded URLs \u2192 <b>manual review in jadx</b>; remediate only if confirmed.",
+    "Packer detected \u2192 <b>unpack first</b> (FRIDA-DEXDump / BlackDex), then re-scan.",
+    "Clean / low \u2192 <b>archive the report</b>."
+  ],
+  references: [
+    { label:"MITRE ATT&CK — Mobile matrix", url:"https://attack.mitre.org/matrices/mobile/" },
+    { label:"OWASP MASVS", url:"https://mas.owasp.org/MASVS/" },
+    { label:"OWASP MASTG", url:"https://mas.owasp.org/MASTG/" },
+    { label:"Android Manifest.permission reference", url:"https://developer.android.com/reference/android/Manifest.permission" },
+    { label:"apk-plug — Stage 2 (scan) docs", url:"../references/stage2-scan.md" },
+    { label:"apk-plug — Stage 3 (remediate) docs", url:"../references/stage3-remediate.md" }
+  ],
+  dangerousPerms: {
+    SEND_SMS:"Can send text messages (premium-SMS fraud).", READ_SMS:"Can read texts, incl. 2FA codes.",
+    RECEIVE_SMS:"Can intercept incoming texts (2FA theft).", RECEIVE_MMS:"Can intercept MMS messages.",
+    READ_CALL_LOG:"Reveals who the user calls.", WRITE_CALL_LOG:"Can alter the call history.",
+    READ_CONTACTS:"Harvests the user's address book.", WRITE_CONTACTS:"Can modify contacts.",
+    GET_ACCOUNTS:"Enumerates on-device accounts.", ACCESS_FINE_LOCATION:"Precise GPS location tracking.",
+    ACCESS_COARSE_LOCATION:"Approximate location tracking.", ACCESS_BACKGROUND_LOCATION:"Location tracking even in background.",
+    CAMERA:"Can capture photos / video.", RECORD_AUDIO:"Can record audio from the microphone.",
+    READ_EXTERNAL_STORAGE:"Broad read access to user files.", WRITE_EXTERNAL_STORAGE:"Broad write access to user files.",
+    MANAGE_EXTERNAL_STORAGE:"Full ('all files') storage access.", REQUEST_INSTALL_PACKAGES:"Can prompt to install other APKs — dropper / second-stage vector.",
+    SYSTEM_ALERT_WINDOW:"Can draw over other apps — overlay / tapjacking / phishing.", RECEIVE_BOOT_COMPLETED:"Auto-starts on boot — persistence.",
+    QUERY_ALL_PACKAGES:"Enumerates every installed app — fingerprinting / targeting.", READ_PHONE_STATE:"Reads device / phone identifiers.",
+    READ_PHONE_NUMBERS:"Reads the device phone number.", CALL_PHONE:"Can place phone calls (toll fraud).",
+    PROCESS_OUTGOING_CALLS:"Can see/redirect outgoing calls.", READ_CALENDAR:"Reads the user's calendar.",
+    WRITE_CALENDAR:"Can modify calendar events.", BIND_ACCESSIBILITY_SERVICE:"Accessibility service — can read the screen and simulate taps (powerful abuse vector).",
+    BIND_DEVICE_ADMIN:"Device admin — can lock/wipe the device and resist uninstall.", WRITE_SETTINGS:"Can change system settings.",
+    BODY_SENSORS:"Reads body/health sensor data.", READ_MEDIA_IMAGES:"Reads the photo library.",
+    READ_MEDIA_VIDEO:"Reads stored videos.", READ_MEDIA_AUDIO:"Reads stored audio.",
+    USE_FINGERPRINT:"Uses fingerprint biometrics.", USE_BIOMETRIC:"Uses biometric authentication.",
+    DETECT_SCREEN_CAPTURE:"Detects when the screen is captured.", MODIFY_AUDIO_SETTINGS:"Changes global audio settings."
+  }
+};
+
+/* ---------- tiny DOM + util helpers ---------- */
+function $(sel, root){ return (root||document).querySelector(sel); }
+function el(tag, attrs, kids){
+  var n=document.createElement(tag); attrs=attrs||{};
+  for(var k in attrs){
+    if(k==="class") n.className=attrs[k];
+    else if(k==="html") n.innerHTML=attrs[k];
+    else if(k==="text") n.textContent=attrs[k];
+    else if(k.slice(0,2)==="on" && typeof attrs[k]==="function") n.addEventListener(k.slice(2), attrs[k]);
+    else if(attrs[k]!=null) n.setAttribute(k, attrs[k]);
+  }
+  (kids||[]).forEach(function(c){ if(c==null) return; n.appendChild(typeof c==="string"?document.createTextNode(c):c); });
+  return n;
+}
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];}); }
+function toast(msg){ var t=$("#toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(t._t); t._t=setTimeout(function(){t.classList.remove("show");},1800); }
+function copyText(txt){
+  function ok(){ toast("Copied to clipboard"); }
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(txt).then(ok).catch(fallback);
+  } else fallback();
+  function fallback(){
+    try{ var ta=document.createElement("textarea"); ta.value=txt; ta.style.position="fixed"; ta.style.opacity="0";
+      document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta); ok(); }
+    catch(e){ toast("Copy failed"); }
+  }
+}
+function fmtDate(iso){
+  if(!iso) return "—";
+  var d=new Date(iso); if(isNaN(d.getTime())) return String(iso);
+  try{ return d.toLocaleString(undefined,{dateStyle:"medium",timeStyle:"short"})+"  ("+iso+")"; }
+  catch(e){ return d.toString(); }
+}
+/* ---------- rule / description resolution ---------- */
+function prettyRule(rule){
+  if(!rule) return "(unnamed rule)";
+  var m=String(rule).match(/(MSTG|MASVS)-[A-Za-z]+-[0-9A-Za-z_]+/);
+  if(m) return m[0];
+  if(String(rule).indexOf(".")>=0){ var seg=String(rule).split(".").filter(Boolean); return seg[seg.length-1]||rule; }
+  return String(rule);
+}
+function mstgCategoryOf(rule){
+  var m=String(rule||"").match(/MSTG-([A-Za-z]+)/);
+  return m?m[1].toUpperCase():null;
+}
+/* returns {title, desc, rem?} for a finding, always non-null */
+function describeFinding(tool, rule, category){
+  var kb=KNOWLEDGE_BASE.ruleFamilies;
+  var r=String(rule||"");
+  if(kb[r]) return kb[r];
+  if(r.indexOf("apkleaks_")===0){
+    if(r==="apkleaks_ip_address") return kb.apkleaks_ip_address;
+    if(r==="apkleaks_authorization_basic") return kb.apkleaks_authorization_basic;
+    return { title:(category?category.replace(/_/g," "):"Leaked secret / IOC"),
+      desc:kb.apkleaks_generic.desc, rem:kb.apkleaks_generic.rem };
+  }
+  var cat=mstgCategoryOf(r);
+  if(cat){
+    var cd=KNOWLEDGE_BASE.mstg[cat];
+    return { title:prettyRule(r), desc:cd?("MASVS/MASTG "+cat+" test violation. "+cd):("MASVS/MASTG static test violation ("+cat+").") };
+  }
+  /* generic fallback for unknown rules */
+  return { title:prettyRule(r),
+    desc:"Finding reported by "+(KNOWLEDGE_BASE.scanners[tool]?KNOWLEDGE_BASE.scanners[tool].name:tool)+". Review the description and location for context." };
+}
+
+/* ---------- flatten findings across tools ---------- */
+function flattenFindings(data){
+  var out=[]; var f=(data && data.findings) || {};
+  Object.keys(f).forEach(function(tool){
+    var arr=f[tool]; if(!Array.isArray(arr)) return;
+    arr.forEach(function(item){
+      if(!item || typeof item!=="object"){
+        out.push({ tool:tool, rule:String(item==null?"":item), severity:"info", description:"", location:"", category:"", confidence:null });
+        return;
+      }
+      var sev=String(item.severity||"info").toLowerCase();
+      if(!(sev in SEV_ORDER)) sev="info";
+      out.push({
+        tool:tool, rule:item.rule!=null?String(item.rule):"",
+        severity:sev, description:item.description!=null?String(item.description):"",
+        location:item.location!=null?String(item.location):"",
+        category:item.category!=null?String(item.category):"",
+        confidence:(typeof item.confidence==="number")?item.confidence:null
+      });
+    });
+  });
+  return out;
+}
+function severityCounts(findings){
+  var c={critical:0,high:0,medium:0,low:0,info:0};
+  findings.forEach(function(x){ if(c[x.severity]!=null) c[x.severity]++; });
+  return c;
+}
+
+/* ---------- score recomputation ("how this score was computed") ---------- */
+function computeScore(data, findings){
+  var counts=severityCounts(findings);
+  var rows=[]; var weightSum=0;
+  SEV_LIST.forEach(function(sev){
+    var n=counts[sev], w=SEV_WEIGHT[sev], sub=n*w; weightSum+=sub;
+    rows.push({ sev:sev, count:n, weight:w, sub:sub });
+  });
+  var drivers=(data.aggregate_risk && Array.isArray(data.aggregate_risk.drivers))?data.aggregate_risk.drivers:[];
+  var driverRows=[]; var bonusSum=0;
+  drivers.forEach(function(d){
+    var b=DRIVER_BONUS[d]!=null?DRIVER_BONUS[d]:0; bonusSum+=b;
+    var meta=KNOWLEDGE_BASE.drivers[d];
+    driverRows.push({ key:d, label:meta?meta.label:d, bonus:b, known:!!meta });
+  });
+  var raw=weightSum+bonusSum;
+  var computed=Math.min(100, raw);
+  return { rows:rows, weightSum:weightSum, driverRows:driverRows, bonusSum:bonusSum, raw:raw, computed:computed, capped:raw>100 };
+}
+
+/* ---------- URL analysis (noise heuristic + IP literal) ---------- */
+function isIp(h){ return /^\d{1,3}(\.\d{1,3}){3}$/.test(h||""); }
+function analyzeUrl(raw){
+  var u=String(raw==null?"":raw).trim();
+  var unq=u.replace(/^["'`]+/,"").replace(/["'`]+$/,"");
+  var noise=false, reason="";
+  var m=unq.match(/^(https?):\/\/([^\/\s]*)/i);
+  if(!m){ noise=true; reason="No http(s) scheme / not a real URL"; }
+  else {
+    var host=m[2].replace(/:\d+$/,"");
+    if(/[%${}<>()\[\]]/.test(unq) || unq.indexOf("::")>=0){ noise=true; reason="Contains code / template characters"; }
+    else if(!host || host.charAt(host.length-1)==="." || (host.indexOf(".")<0 && !/^localhost$/i.test(host) && !isIp(host))){ noise=true; reason="Implausible host"; }
+    else if(/(%p|%s|\$\{)/.test(unq)){ noise=true; reason="Template placeholder"; }
+  }
+  var host2=m?m[2].replace(/:\d+$/,""):"";
+  return { url:unq, noise:noise, reason:reason, ip:isIp(host2), host:host2 };
+}
+
+/* ---------- permission analysis ---------- */
+function permLeaf(p){ var s=String(p||""); var i=s.lastIndexOf("."); return (i>=0?s.slice(i+1):s).toUpperCase(); }
+function permRisk(p){
+  var leaf=permLeaf(p);
+  return KNOWLEDGE_BASE.dangerousPerms[leaf] || null;
+}
+/* =====================================================================
+   STATE
+   ===================================================================== */
+var state = { reports:[], active:0, view:"report" };
+/* per-render findings UI state kept on the app node between renders */
+var findState = { search:"", sevFilter:{}, toolFilter:{}, sortKey:"severity", sortDir:1, shown:0, chunk:60, flat:[] };
+
+/* =====================================================================
+   RENDER: top tabs
+   ===================================================================== */
+function reportLabel(rep,i){
+  var apkName=(rep&&rep.data&&rep.data.apk&&rep.data.apk.name)||"";
+  var fn=(rep&&rep.filename||"").replace(/\.threat-report\.json$/i,"").replace(/\.json$/i,"");
+  // The pipeline normalizes every APK to "target.apk", so that name is useless
+  // for telling reports apart — prefer the source filename in that case.
+  if(!apkName || apkName.toLowerCase()==="target.apk") return fn || apkName || ("report "+((i||0)+1));
+  return apkName;
+}
+function renderTabs(){
+  var nav=$("#reportTabs"); nav.innerHTML="";
+  if(state.reports.length===0) return;
+  state.reports.forEach(function(rep,i){
+    var lvl=(rep.data.aggregate_risk&&rep.data.aggregate_risk.level)||"low";
+    var name=reportLabel(rep,i);
+    var apkName=(rep.data.apk&&rep.data.apk.name)||"";
+    var b=el("button",{ class:"tab", role:"tab", "aria-selected":(state.view==="report"&&state.active===i)?"true":"false",
+      title:name+(apkName&&apkName!==name?(" ("+apkName+")"):""), onclick:function(){ state.view="report"; state.active=i; render(); } });
+    var dot=el("span",{class:"dot"}); dot.style.background="var(--lvl-"+lvl+")";
+    b.appendChild(dot); b.appendChild(document.createTextNode(name));
+    nav.appendChild(b);
+  });
+  if(state.reports.length>1){
+    var c=el("button",{ class:"tab", role:"tab", "aria-selected":(state.view==="compare")?"true":"false",
+      onclick:function(){ state.view="compare"; render(); } , text:"⇄ Compare" });
+    nav.appendChild(c);
+  }
+}
+
+/* =====================================================================
+   RENDER: gauge (SVG ring)
+   ===================================================================== */
+function gauge(score, level){
+  var pct=Math.max(0,Math.min(100,score))/100;
+  var R=86, C=2*Math.PI*R, off=C*(1-pct);
+  var color="var(--lvl-"+level+")";
+  var wrap=el("div",{class:"gauge"});
+  wrap.innerHTML=
+    '<svg width="200" height="200" viewBox="0 0 200 200" role="img" aria-label="Risk score '+score+' out of 100, level '+esc(level)+'">'
+    +'<circle cx="100" cy="100" r="'+R+'" fill="none" stroke="var(--track)" stroke-width="16"/>'
+    +'<circle cx="100" cy="100" r="'+R+'" fill="none" stroke="'+color+'" stroke-width="16" stroke-linecap="round"'
+    +' stroke-dasharray="'+C.toFixed(1)+'" stroke-dashoffset="'+off.toFixed(1)+'"/>'
+    +'</svg>'
+    +'<div class="num"><b style="color:'+color+'">'+esc(score)+'</b><span>RISK / 100</span></div>';
+  return wrap;
+}
+
+/* =====================================================================
+   RENDER: risk hero (gauge + drivers + score breakdown)
+   ===================================================================== */
+function renderHero(data, findings){
+  var ar=data.aggregate_risk||{}; var score=(typeof ar.score==="number")?ar.score:0;
+  var level=String(ar.level||"low").toLowerCase(); if(["low","medium","high","critical"].indexOf(level)<0) level="low";
+  var calc=computeScore(data, findings);
+
+  var left=el("div",{class:"gauge-wrap"},[ gauge(score,level), el("span",{class:"lvl-badge lvl-"+level,text:level}) ]);
+
+  var right=el("div",{class:"hero-right"});
+  right.appendChild(el("h3",{text:"Risk drivers"}));
+  var drivers=el("div",{class:"drivers"});
+  if(calc.driverRows.length===0){
+    drivers.appendChild(el("span",{class:"muted tiny",text:"No behavioural drivers — score comes purely from finding counts (see breakdown)."}));
+  } else {
+    calc.driverRows.forEach(function(d){
+      var meta=KNOWLEDGE_BASE.drivers[d.key];
+      var tip=(meta?meta.desc:"Unknown driver.")+" (+"+d.bonus+")";
+      drivers.appendChild(el("span",{class:"chip tip",title:tip,html:esc(d.label)+' <b style="color:var(--sev-high)">+'+d.bonus+"</b>"}));
+    });
+  }
+  right.appendChild(drivers);
+
+  /* breakdown table */
+  var box=el("div",{class:"calc"});
+  var rowsHtml="";
+  calc.rows.forEach(function(r){
+    if(r.count===0 && r.weight===0) return;
+    rowsHtml+='<tr><td><span class="pill sev-'+r.sev+'">'+SEV_LABEL[r.sev]+'</span></td>'
+      +'<td class="num">'+r.count+'</td><td class="num">×'+r.weight+'</td><td class="num">'+r.sub+'</td></tr>';
+  });
+  var driverHtml="";
+  calc.driverRows.forEach(function(d){
+    driverHtml+='<tr><td colspan="3">Driver bonus · '+esc(d.label)+(d.known?"":" (unknown)")+'</td><td class="num">+'+d.bonus+'</td></tr>';
+  });
+  var mismatch = (typeof ar.score==="number") && (ar.score!==calc.computed);
+  box.innerHTML=
+    '<table><thead><tr><th>Severity / factor</th><th class="num">Count</th><th class="num">Weight</th><th class="num">Points</th></tr></thead>'
+    +'<tbody>'+ (rowsHtml||'<tr><td colspan="4" class="muted tiny" style="padding:9px 12px">No findings contributed points.</td></tr>')
+    + driverHtml
+    +'<tr class="total"><td>Σ raw</td><td class="num"></td><td class="num"></td><td class="num">'+calc.raw+'</td></tr>'
+    +'</tbody></table>'
+    +'<div class="cap-note">Score = min(100, Σ&nbsp;finding-weights + driver-bonuses) = min(100, '+calc.raw+') = <b>'+calc.computed+'</b>. '
+    +(calc.capped?'Capped at 100. ':'')
+    +(mismatch?'<span class="mismatch">⚠ Report states '+esc(ar.score)+' — computed '+calc.computed+' from this data.</span>'
+              :'Matches the reported score.')
+    +'<br>Weights: critical 25 · high 15 · medium 5 · low 1 · info 0. '
+    +(level==="critical" && calc.driverRows.length===0 && (severityCounts(findings).critical+severityCounts(findings).high)===0
+        ? '<br><b>Note:</b> this “critical/100” comes entirely from many low/medium findings, <b>not</b> a confirmed malware signal — triage accordingly.'
+        : '')
+    +'</div>';
+  right.appendChild(box);
+
+  var hero=el("section",{class:"card hero"},[ left, right ]);
+  return hero;
+}
+
+/* =====================================================================
+   RENDER: header meta
+   ===================================================================== */
+function renderMeta(data){
+  var apk=data.apk||{};
+  var grid=el("div",{class:"meta-grid"});
+  function cell(k,vNode){ return el("div",{class:"meta-cell"},[ el("div",{class:"k",text:k}), vNode ]); }
+  grid.appendChild(cell("APK name", el("div",{class:"v mono",text:apk.name||"—"})));
+  var sha=apk.sha256||"";
+  var shaNode=el("div",{class:"v copyable"});
+  shaNode.appendChild(el("code",{text:sha||"—",style:"font-size:12px"}));
+  if(sha){ shaNode.appendChild(el("button",{class:"copybtn",text:"copy","aria-label":"Copy sha256",
+    onclick:function(e){ copyText(sha); var b=e.currentTarget; b.textContent="copied"; b.classList.add("done"); setTimeout(function(){b.textContent="copy";b.classList.remove("done");},1200); }})); }
+  grid.appendChild(cell("SHA-256", shaNode));
+  grid.appendChild(cell("Generated at", el("div",{class:"v",text:fmtDate(data.generated_at)})));
+  grid.appendChild(cell("Schema version", el("div",{class:"v mono",text:data.schema_version||"—"})));
+  return el("section",{class:"section"},[ grid ]);
+}
+
+/* =====================================================================
+   RENDER: scanner status matrix
+   ===================================================================== */
+function renderTools(data){
+  var tools=data.tools||{};
+  var sec=el("section",{class:"section"});
+  sec.appendChild(el("div",{class:"section-head"},[ el("h2",{text:"Scanner status"}),
+    el("span",{class:"count",text:TOOLS.length+" tools"}) ]));
+  var grid=el("div",{class:"tool-grid"});
+  TOOLS.forEach(function(t){
+    var meta=KNOWLEDGE_BASE.scanners[t]||{name:t,blurb:""};
+    var info=tools[t]||{};
+    var status=String(info.status||"not_run").toLowerCase();
+    if(["ran","not_run","error"].indexOf(status)<0) status="not_run";
+    var statusLabel={ran:"ran",not_run:"not run",error:"error"}[status];
+    var tip=status==="not_run"?"Scanner unavailable or timed out — marked not_run (graceful degradation). Findings from this tool are absent."
+           :status==="error"?"The scanner errored during this run; its findings may be incomplete."
+           :"Scanner executed successfully.";
+    var card=el("div",{class:"tool"});
+    var head=el("div",{class:"th"},[
+      el("span",{class:"name",text:meta.name}),
+      el("span",{class:"pill status-"+status+" tip",title:tip,text:statusLabel})
+    ]);
+    card.appendChild(head);
+    card.appendChild(el("div",{class:"blurb",text:meta.blurb}));
+    /* tool-specific extras */
+    var extras=[];
+    if(Array.isArray(info.packers)&&info.packers.length) extras.push(["Packers",info.packers,"danger"]);
+    if(Array.isArray(info.obfuscators)&&info.obfuscators.length) extras.push(["Obfuscators",info.obfuscators,""]);
+    if(Array.isArray(info.yara_matches)&&info.yara_matches.length) extras.push(["YARA matches",info.yara_matches,"danger"]);
+    var scalar=[];
+    if(info.threat_level!=null) scalar.push("threat: "+info.threat_level);
+    if(info.total_score!=null) scalar.push("score: "+info.total_score);
+    if(extras.length||scalar.length){
+      var ex=el("div",{class:"extra"});
+      extras.forEach(function(pair){
+        ex.appendChild(el("span",{class:"lbl",text:pair[0]}));
+        pair[1].forEach(function(v){ ex.appendChild(el("span",{class:"chip "+(pair[2]||""),text:String(v)})); });
+      });
+      if(scalar.length){ ex.appendChild(el("span",{class:"lbl",text:"Quark"})); scalar.forEach(function(s){ ex.appendChild(el("span",{class:"chip danger",text:s})); }); }
+      card.appendChild(ex);
+    }
+    grid.appendChild(card);
+  });
+  sec.appendChild(grid);
+  return sec;
+}
+/* =====================================================================
+   RENDER: findings (filter / sort / search / show-more)
+   ===================================================================== */
+function renderFindings(data){
+  var flat=flattenFindings(data);
+  findState.flat=flat;
+  var counts=severityCounts(flat);
+  var toolsPresent=[]; flat.forEach(function(x){ if(toolsPresent.indexOf(x.tool)<0) toolsPresent.push(x.tool); });
+  toolsPresent.sort();
+
+  /* init filter state (default: all on) */
+  findState.search=""; findState.sortKey="severity"; findState.sortDir=1; findState.shown=findState.chunk;
+  findState.sevFilter={}; SEV_LIST.forEach(function(s){ findState.sevFilter[s]=true; });
+  findState.toolFilter={}; toolsPresent.forEach(function(t){ findState.toolFilter[t]=true; });
+
+  var sec=el("section",{class:"section"});
+  sec.appendChild(el("div",{class:"section-head"},[ el("h2",{text:"Findings"}),
+    el("span",{class:"count",id:"findCount",text:flat.length+" total"}) ]));
+
+  if(flat.length===0){
+    sec.appendChild(el("div",{class:"card empty-note",text:"No findings were reported by any scanner for this APK."}));
+    return sec;
+  }
+
+  /* severity distribution bar + legend */
+  var bar=el("div",{class:"sevbar","aria-hidden":"true"});
+  SEV_LIST.forEach(function(s){ if(counts[s]>0){ var i=el("i",{class:s}); i.style.flex=counts[s]; bar.appendChild(i); } });
+  sec.appendChild(bar);
+  var legend=el("div",{class:"sevlegend"});
+  SEV_LIST.forEach(function(s){ if(counts[s]>0) legend.appendChild(el("span",{class:"tip",title:KNOWLEDGE_BASE.severities[s].desc,
+    html:'<span class="pill sev-'+s+'">'+SEV_LABEL[s]+'</span> <b>'+counts[s]+'</b>'})); });
+  sec.appendChild(legend);
+
+  /* controls */
+  var controls=el("div",{class:"controls"});
+  var search=el("div",{class:"search"});
+  search.innerHTML='<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>';
+  var input=el("input",{type:"search",placeholder:"Search rule, description, location…","aria-label":"Search findings"});
+  input.addEventListener("input",function(){ findState.search=input.value.toLowerCase(); findState.shown=findState.chunk; repaintFindings(); });
+  search.appendChild(input);
+  controls.appendChild(search);
+
+  /* severity multi-select */
+  controls.appendChild(makeFilterMenu("Severity", SEV_LIST.filter(function(s){return counts[s]>0;}).map(function(s){return {key:s,label:SEV_LABEL[s]};}), findState.sevFilter));
+  /* tool multi-select */
+  controls.appendChild(makeFilterMenu("Tool", toolsPresent.map(function(t){return {key:t,label:(KNOWLEDGE_BASE.scanners[t]?KNOWLEDGE_BASE.scanners[t].name:t)};}), findState.toolFilter));
+
+  sec.appendChild(controls);
+
+  /* table */
+  var scroll=el("div",{class:"tbl-scroll"});
+  var table=el("table",{class:"f-table"});
+  table.innerHTML=
+    '<thead><tr>'
+    +'<th data-sort="severity" class="active">Severity <span class="arrow">▼</span></th>'
+    +'<th data-sort="tool">Tool <span class="arrow">▲▼</span></th>'
+    +'<th data-sort="rule">Rule <span class="arrow">▲▼</span></th>'
+    +'<th>Description</th>'
+    +'<th class="col-loc" data-sort="location">Location <span class="arrow">▲▼</span></th>'
+    +'<th class="col-cat">Category / conf.</th>'
+    +'</tr></thead><tbody id="findBody"></tbody>';
+  scroll.appendChild(table);
+  sec.appendChild(scroll);
+
+  /* sort handlers */
+  Array.prototype.forEach.call(table.querySelectorAll("th[data-sort]"),function(th){
+    th.addEventListener("click",function(){
+      var k=th.getAttribute("data-sort");
+      if(findState.sortKey===k) findState.sortDir*=-1; else { findState.sortKey=k; findState.sortDir=1; }
+      Array.prototype.forEach.call(table.querySelectorAll("th"),function(x){x.classList.remove("active");});
+      th.classList.add("active");
+      var ar=th.querySelector(".arrow"); 
+      Array.prototype.forEach.call(table.querySelectorAll(".arrow"),function(a){a.textContent="▲▼";});
+      if(ar) ar.textContent=findState.sortDir>0?"▼":"▲";
+      findState.shown=findState.chunk; repaintFindings();
+    });
+  });
+
+  var more=el("div",{class:"showmore",id:"showMoreWrap"});
+  sec.appendChild(more);
+
+  /* defer first paint until node is in DOM */
+  setTimeout(repaintFindings,0);
+  return sec;
+}
+
+function makeFilterMenu(label, items, stateObj){
+  var wrap=el("div",{class:"select-wrap"});
+  var btn=el("button",{class:"btn","aria-haspopup":"true","aria-expanded":"false"});
+  function refreshLabel(){
+    var on=items.filter(function(it){return stateObj[it.key];}).length;
+    btn.innerHTML=esc(label)+' <b style="color:var(--accent-text)">'+on+"/"+items.length+"</b> ▾";
+  }
+  refreshLabel();
+  var menu=el("div",{class:"filter-menu",role:"group","aria-label":label+" filter"});
+  var allLbl=el("label",{},[]);
+  var allCb=el("input",{type:"checkbox"}); allCb.checked=true;
+  allCb.addEventListener("change",function(){ items.forEach(function(it){ stateObj[it.key]=allCb.checked; }); 
+    Array.prototype.forEach.call(menu.querySelectorAll("input[data-k]"),function(c){c.checked=allCb.checked;});
+    refreshLabel(); findState.shown=findState.chunk; repaintFindings(); });
+  allLbl.appendChild(allCb); allLbl.appendChild(el("span",{html:"<b>All "+esc(label.toLowerCase())+"</b>"}));
+  menu.appendChild(allLbl);
+  items.forEach(function(it){
+    var l=el("label",{});
+    var cb=el("input",{type:"checkbox","data-k":it.key}); cb.checked=true;
+    cb.addEventListener("change",function(){ stateObj[it.key]=cb.checked;
+      allCb.checked=items.every(function(x){return stateObj[x.key];});
+      refreshLabel(); findState.shown=findState.chunk; repaintFindings(); });
+    l.appendChild(cb);
+    if(SEV_LABEL[it.key] && label==="Severity") l.appendChild(el("span",{html:'<span class="pill sev-'+it.key+'">'+esc(it.label)+'</span>'}));
+    else l.appendChild(el("span",{text:it.label}));
+    menu.appendChild(l);
+  });
+  btn.addEventListener("click",function(e){ e.stopPropagation(); var open=menu.classList.toggle("open"); btn.setAttribute("aria-expanded",open?"true":"false"); });
+  document.addEventListener("click",function(){ menu.classList.remove("open"); btn.setAttribute("aria-expanded","false"); });
+  menu.addEventListener("click",function(e){ e.stopPropagation(); });
+  wrap.appendChild(btn); wrap.appendChild(menu);
+  return wrap;
+}
+
+function filteredSorted(){
+  var q=findState.search;
+  var arr=findState.flat.filter(function(x){
+    if(!findState.sevFilter[x.severity]) return false;
+    if(!findState.toolFilter[x.tool]) return false;
+    if(q){
+      var hay=(x.rule+" "+x.description+" "+x.location+" "+x.category+" "+prettyRule(x.rule)).toLowerCase();
+      if(hay.indexOf(q)<0) return false;
+    }
+    return true;
+  });
+  var k=findState.sortKey, dir=findState.sortDir;
+  arr.sort(function(a,b){
+    var av,bv;
+    if(k==="severity"){ av=SEV_ORDER[a.severity]; bv=SEV_ORDER[b.severity]; }
+    else if(k==="rule"){ av=prettyRule(a.rule).toLowerCase(); bv=prettyRule(b.rule).toLowerCase(); }
+    else { av=String(a[k]||"").toLowerCase(); bv=String(b[k]||"").toLowerCase(); }
+    if(av<bv) return -1*dir; if(av>bv) return 1*dir;
+    /* stable secondary: severity then tool */
+    return (SEV_ORDER[a.severity]-SEV_ORDER[b.severity]) || (a.tool<b.tool?-1:1);
+  });
+  return arr;
+}
+
+function repaintFindings(){
+  var body=$("#findBody"); if(!body) return;
+  var arr=filteredSorted();
+  var cnt=$("#findCount"); if(cnt) cnt.textContent=arr.length+" shown / "+findState.flat.length+" total";
+  var limit=Math.min(findState.shown, arr.length);
+  var frag=document.createDocumentFragment();
+  for(var i=0;i<limit;i++){
+    var x=arr[i]; var info=describeFinding(x.tool,x.rule,x.category);
+    var tr=document.createElement("tr");
+    var pr=prettyRule(x.rule);
+    var full=(x.rule && x.rule!==pr)?'<span class="full" title="'+esc(x.rule)+'">'+esc(x.rule)+'</span>':'';
+    var conf=(x.confidence!=null)?('conf '+x.confidence):'';
+    var catTxt=[x.category?esc(x.category):"", conf?esc(conf):""].filter(Boolean).join(" · ");
+    tr.innerHTML=
+      '<td><span class="pill sev-'+x.severity+'">'+SEV_LABEL[x.severity]+'</span></td>'
+      +'<td class="f-tool">'+esc(KNOWLEDGE_BASE.scanners[x.tool]?KNOWLEDGE_BASE.scanners[x.tool].name:x.tool)+'</td>'
+      +'<td><span class="f-rule tip" title="'+esc(info.title)+'">'+esc(pr)+'</span>'+full+'</td>'
+      +'<td class="f-desc">'+esc(x.description||info.desc)+'</td>'
+      +'<td class="f-loc col-loc">'+esc(x.location||"—")+'</td>'
+      +'<td class="f-cat col-cat">'+(catTxt||"—")+'</td>';
+    frag.appendChild(tr);
+  }
+  body.innerHTML=""; body.appendChild(frag);
+  var mw=$("#showMoreWrap");
+  if(mw){
+    mw.innerHTML="";
+    if(arr.length>limit){
+      mw.appendChild(el("button",{class:"btn",html:"Show more · "+(arr.length-limit)+" remaining",
+        onclick:function(){ findState.shown+=findState.chunk*2; repaintFindings(); }}));
+    } else if(arr.length>findState.chunk){
+      mw.appendChild(el("span",{class:"muted tiny",text:"All "+arr.length+" shown."}));
+    }
+  }
+}
+
+/* =====================================================================
+   RENDER: URLs & endpoints (noise heuristic + IP-literal flag)
+   ===================================================================== */
+var urlState = { hideNoise:true };
+function renderUrls(data){
+  var urls=Array.isArray(data.urls)?data.urls:[];
+  var sec=el("section",{class:"section"});
+  var countSpan=el("span",{class:"count",text:urls.length+" total"});
+  sec.appendChild(el("div",{class:"section-head"},[ el("h2",{text:"URLs & endpoints"}), countSpan ]));
+  if(urls.length===0){ sec.appendChild(el("div",{class:"card empty-note",text:"No URLs were extracted."})); return sec; }
+
+  var analyzed=urls.map(analyzeUrl);
+  var noiseCount=analyzed.filter(function(a){return a.noise;}).length;
+  var ipCount=analyzed.filter(function(a){return a.ip;}).length;
+
+  var controls=el("div",{class:"controls"});
+  var toggle=el("label",{class:"chip link",style:"user-select:none"});
+  var cb=el("input",{type:"checkbox",style:"margin-right:7px;accent-color:var(--accent)"}); cb.checked=urlState.hideNoise;
+  cb.addEventListener("change",function(){ urlState.hideNoise=cb.checked; paint(); });
+  toggle.appendChild(cb); toggle.appendChild(document.createTextNode("Hide likely-noise ("+noiseCount+")"));
+  controls.appendChild(toggle);
+  if(ipCount>0) controls.appendChild(el("span",{class:"chip danger tip",title:"URLs whose host is a raw IP literal — classic hardcoded-C2 tell",html:'<b>'+ipCount+'</b> IP-literal'}));
+  controls.appendChild(el("button",{class:"btn",text:"Copy all",onclick:function(){ copyText(analyzed.map(function(a){return a.url;}).join("\n")); }}));
+  sec.appendChild(controls);
+
+  var listWrap=el("div",{}); sec.appendChild(listWrap);
+  function paint(){
+    var shown=analyzed.filter(function(a){ return urlState.hideNoise ? !a.noise : true; });
+    var ul=el("ul",{class:"url-list"});
+    if(shown.length===0){
+      ul.appendChild(el("li",{},[ el("span",{class:"muted tiny",text:"All "+analyzed.length+" entries were classified as extraction noise. Untick “Hide likely-noise” to show them."}) ]));
+    }
+    shown.forEach(function(a){
+      var li=el("li",{class:a.noise?"noise":""});
+      if(a.ip) li.appendChild(el("span",{class:"url-flag flag-c2",title:"Host is a raw IP literal — possible hardcoded C2",text:"IP"}));
+      else if(a.noise) li.appendChild(el("span",{class:"url-flag flag-noise",title:a.reason||"Likely extraction noise",text:"noise"}));
+      li.appendChild(el("span",{text:a.url}));
+      ul.appendChild(li);
+    });
+    listWrap.innerHTML=""; listWrap.appendChild(ul);
+    countSpan.textContent=shown.length+" shown / "+analyzed.length+" total";
+  }
+  paint();
+  return sec;
+}
+
+/* =====================================================================
+   RENDER: permissions
+   ===================================================================== */
+function renderPermissions(data){
+  var perms=Array.isArray(data.permissions)?data.permissions:[];
+  var dangerous=perms.filter(function(p){return permRisk(p);});
+  var sec=el("section",{class:"section"});
+  sec.appendChild(el("div",{class:"section-head"},[
+    el("h2",{text:"Permissions"}),
+    el("span",{class:"count",text:perms.length+" total"}),
+    dangerous.length?el("span",{class:"pill sev-high tip",title:"Permissions that grant sensitive capabilities commonly abused by malware",text:dangerous.length+" sensitive"}):null
+  ]));
+  if(perms.length===0){ sec.appendChild(el("div",{class:"card empty-note",text:"No permissions were listed."})); return sec; }
+  var grid=el("div",{class:"perm-grid"});
+  perms.slice().sort(function(a,b){ var da=permRisk(a)?0:1, db=permRisk(b)?0:1; if(da!==db) return da-db; return a<b?-1:(a>b?1:0); }).forEach(function(p){
+    var risk=permRisk(p);
+    var cell=el("div",{class:"perm"+(risk?" danger":"")});
+    var pn=el("div",{class:"pn"});
+    pn.appendChild(el("span",{text:String(p)}));
+    if(risk) pn.appendChild(el("span",{class:"pill sev-high",text:"sensitive"}));
+    cell.appendChild(pn);
+    if(risk) cell.appendChild(el("div",{class:"pr",text:risk}));
+    grid.appendChild(cell);
+  });
+  sec.appendChild(grid);
+  return sec;
+}
+
+/* =====================================================================
+   RENDER: components
+   ===================================================================== */
+function renderComponents(data){
+  var comps=Array.isArray(data.components)?data.components:[];
+  var sec=el("section",{class:"section"});
+  sec.appendChild(el("div",{class:"section-head"},[ el("h2",{text:"Components"}), el("span",{class:"count",text:comps.length+" total"}) ]));
+  if(comps.length===0){ sec.appendChild(el("div",{class:"card empty-note",text:"No exported components were reported by any tool."})); return sec; }
+  var scroll=el("div",{class:"tbl-scroll"});
+  var t=el("table",{class:"f-table"});
+  var rows=comps.map(function(c){
+    c=c||{};
+    var exp=c.exported===true?'<span class="pill sev-high">exported</span>'
+           :c.exported===false?'<span class="pill sev-info">private</span>':"—";
+    return '<tr><td>'+esc(c.type||"—")+'</td>'
+      +'<td class="mono" style="font-size:12px;word-break:break-all">'+esc(c.name||"—")+'</td>'
+      +'<td>'+esc(c.source_tool||"—")+'</td>'
+      +'<td>'+exp+'</td>'
+      +'<td class="mono" style="font-size:12px;word-break:break-all">'+esc(c.permission||"—")+'</td></tr>';
+  }).join("");
+  t.innerHTML='<thead><tr><th>Type</th><th>Name</th><th>Source</th><th>Exported</th><th>Permission</th></tr></thead><tbody>'+rows+'</tbody>';
+  scroll.appendChild(t); sec.appendChild(scroll);
+  return sec;
+}
+
+/* =====================================================================
+   RENDER: MITRE ATT&CK techniques
+   ===================================================================== */
+function renderMitre(data){
+  var techs=Array.isArray(data.mitre_techniques)?data.mitre_techniques:[];
+  var sec=el("section",{class:"section"});
+  sec.appendChild(el("div",{class:"section-head"},[ el("h2",{text:"MITRE ATT&CK techniques"}), el("span",{class:"count",text:techs.length+" total"}) ]));
+  if(techs.length===0){ sec.appendChild(el("div",{class:"card empty-note",text:"No MITRE ATT&CK techniques were mapped (apktriage not run, or none matched)."})); return sec; }
+  var wrap=el("div",{class:"drivers"});
+  techs.forEach(function(tq){
+    tq=tq||{}; var id=tq.id!=null?String(tq.id):""; var name=tq.name!=null?String(tq.name):"";
+    var url="https://attack.mitre.org/techniques/"+id.replace(/\./g,"/")+"/";
+    wrap.appendChild(el("a",{class:"chip link",href:url,target:"_blank",rel:"noopener",html:'<b>'+esc(id||"?")+'</b> '+esc(name)}));
+  });
+  sec.appendChild(wrap);
+  return sec;
+}
+
+/* =====================================================================
+   RENDER: compare view
+   ===================================================================== */
+function renderCompare(){
+  var reps=state.reports;
+  var sec=el("section",{class:"section"});
+  sec.appendChild(el("div",{class:"section-head"},[ el("h2",{text:"Compare reports"}), el("span",{class:"count",text:reps.length+" reports"}) ]));
+  var scroll=el("div",{class:"cmp-scroll"});
+  var t=el("table",{class:"cmp"});
+  var head="<thead><tr><th>Metric</th>";
+  reps.forEach(function(r,i){ head+='<th>'+esc(reportLabel(r,i))+'</th>'; });
+  head+="</tr></thead>";
+  function row(label, cells){ return '<tr><th>'+esc(label)+'</th>'+cells.map(function(c){return '<td class="center">'+c+'</td>';}).join("")+'</tr>'; }
+  var body="<tbody>";
+  body+=row("Risk", reps.map(function(r){ var ar=r.data.aggregate_risk||{}; var lvl=String(ar.level||"low").toLowerCase();
+    return '<span class="lvl-badge lvl-'+lvl+'" style="font-size:11px">'+esc(ar.score!=null?ar.score:"—")+' · '+esc(lvl)+'</span>'; }));
+  SEV_LIST.forEach(function(s){
+    body+=row(SEV_LABEL[s]+" findings", reps.map(function(r){ var c=severityCounts(flattenFindings(r.data));
+      return c[s]?('<span class="pill sev-'+s+'">'+c[s]+'</span>'):'<span class="muted">0</span>'; }));
+  });
+  body+=row("Total findings", reps.map(function(r){ return '<b>'+flattenFindings(r.data).length+'</b>'; }));
+  TOOLS.forEach(function(tool){
+    body+=row(KNOWLEDGE_BASE.scanners[tool]?KNOWLEDGE_BASE.scanners[tool].name:tool, reps.map(function(r){
+      var st=String(((r.data.tools||{})[tool]||{}).status||"not_run").toLowerCase();
+      if(["ran","not_run","error"].indexOf(st)<0) st="not_run";
+      var lab={ran:"ran",not_run:"not run",error:"error"}[st];
+      return '<span class="pill status-'+st+'">'+lab+'</span>';
+    }));
+  });
+  body+=row("URLs", reps.map(function(r){ return Array.isArray(r.data.urls)?r.data.urls.length:0; }));
+  body+=row("Permissions", reps.map(function(r){ return Array.isArray(r.data.permissions)?r.data.permissions.length:0; }));
+  body+="</tbody>";
+  t.innerHTML=head+body;
+  scroll.appendChild(t); sec.appendChild(scroll);
+  return sec;
+}
+
+/* =====================================================================
+   GLOSSARY (built once into the slide-over)
+   ===================================================================== */
+function buildGlossary(){
+  var b=$("#glossaryBody"); if(!b) return; b.innerHTML="";
+  function gsec(title){ var s=el("div",{class:"gsec"}); s.appendChild(el("h3",{text:title})); return s; }
+
+  var s1=gsec("Scanners");
+  TOOLS.forEach(function(t){ var m=KNOWLEDGE_BASE.scanners[t]; if(!m) return;
+    var it=el("div",{class:"gitem"});
+    it.appendChild(el("div",{class:"t",text:m.name}));
+    it.appendChild(el("div",{class:"d",text:m.blurb}));
+    s1.appendChild(it); });
+  b.appendChild(s1);
+
+  var s2=gsec("Severity levels");
+  SEV_LIST.forEach(function(sv){ var it=el("div",{class:"gitem"});
+    it.appendChild(el("div",{class:"t",html:'<span class="pill sev-'+sv+'">'+SEV_LABEL[sv]+'</span>'}));
+    it.appendChild(el("div",{class:"d",text:KNOWLEDGE_BASE.severities[sv].desc}));
+    s2.appendChild(it); });
+  b.appendChild(s2);
+
+  var s3=gsec("Risk-score drivers");
+  Object.keys(KNOWLEDGE_BASE.drivers).forEach(function(k){ var d=KNOWLEDGE_BASE.drivers[k]; var it=el("div",{class:"gitem"});
+    it.appendChild(el("div",{class:"t",html:esc(d.label)+' <span class="pill sev-high">+'+d.bonus+'</span>'}));
+    it.appendChild(el("div",{class:"d",text:d.desc}));
+    s3.appendChild(it); });
+  b.appendChild(s3);
+
+  var s4=gsec("Finding types");
+  Object.keys(KNOWLEDGE_BASE.ruleFamilies).forEach(function(k){ if(k==="apkleaks_generic") return;
+    var f=KNOWLEDGE_BASE.ruleFamilies[k]; var it=el("div",{class:"gitem"});
+    it.appendChild(el("div",{class:"t",text:f.title}));
+    it.appendChild(el("div",{class:"d",text:f.desc}));
+    if(f.rem) it.appendChild(el("div",{class:"rem",html:"<b>Remediation:</b> "+esc(f.rem)}));
+    s4.appendChild(it); });
+  b.appendChild(s4);
+
+  var s5=gsec("MASVS / MASTG categories (semgrep)");
+  Object.keys(KNOWLEDGE_BASE.mstg).forEach(function(k){ var it=el("div",{class:"gitem"});
+    it.appendChild(el("div",{class:"t",text:k}));
+    it.appendChild(el("div",{class:"d",text:KNOWLEDGE_BASE.mstg[k]}));
+    s5.appendChild(it); });
+  b.appendChild(s5);
+
+  var s6=gsec("Stage-3 remediation decision tree");
+  var ul=el("ul",{class:"tree"});
+  KNOWLEDGE_BASE.remediationTree.forEach(function(li){ ul.appendChild(el("li",{html:li})); });
+  s6.appendChild(ul); b.appendChild(s6);
+
+  var s7=gsec("References");
+  var rl=el("ul",{class:"reflist"});
+  KNOWLEDGE_BASE.references.forEach(function(r){ rl.appendChild(el("li",{},[ el("a",{href:r.url,target:"_blank",rel:"noopener",text:r.label}) ])); });
+  s7.appendChild(rl); b.appendChild(s7);
+}
+
+/* =====================================================================
+   EMPTY STATE
+   ===================================================================== */
+function renderEmpty(app){
+  var box=el("div",{class:"empty card"});
+  box.innerHTML=
+    '<svg class="big" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">'
+    +'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h6"/></svg>'
+    +'<h2>Load a threat report</h2>'
+    +'<p>Drop one or more <code>threat-report.json</code> files anywhere on this page, or pick them below. Everything runs locally in your browser — nothing is uploaded.</p>';
+  var actions=el("div",{class:"actions"});
+  actions.appendChild(el("button",{class:"btn primary",text:"Choose file(s)…",onclick:function(){ $("#fileInput").click(); }}));
+  actions.appendChild(el("button",{class:"btn",text:"Load sample reports",onclick:loadSamples}));
+  box.appendChild(actions);
+  box.appendChild(el("div",{class:"hint",text:"Tip: serve this folder over http (e.g. python3 -m http.server) to enable the sample loader and ?report= URLs. Opening via file:// still supports drag-and-drop and the file picker."}));
+  if(state.lastError) box.appendChild(el("div",{class:"load-err",text:state.lastError}));
+  app.appendChild(box);
+}
+
+/* =====================================================================
+   MAIN RENDER
+   ===================================================================== */
+function render(){
+  renderTabs();
+  var app=$("#app"); app.innerHTML="";
+  if(state.reports.length===0){ renderEmpty(app); return; }
+  if(state.view==="compare" && state.reports.length>1){ app.appendChild(renderCompare()); return; }
+  if(state.active>=state.reports.length) state.active=0;
+  var data=state.reports[state.active].data;
+  app.appendChild(renderMeta(data));
+  app.appendChild(renderHero(data, flattenFindings(data)));
+  app.appendChild(renderTools(data));
+  app.appendChild(renderFindings(data));
+  app.appendChild(renderUrls(data));
+  app.appendChild(renderPermissions(data));
+  app.appendChild(renderComponents(data));
+  app.appendChild(renderMitre(data));
+}
+
+/* =====================================================================
+   LOADING (file picker, drag-drop, samples, ?report=)
+   ===================================================================== */
+function isReportish(d){ return d && typeof d==="object" && (d.aggregate_risk || d.tools || d.findings || d.apk); }
+function addReport(data, filename){
+  if(!isReportish(data)) throw new Error("not an apk-plug threat report");
+  state.reports.push({ data:data, filename:filename });
+  state.active=state.reports.length-1; state.view="report"; state.lastError=null;
+}
+function loadFiles(fileList){
+  var files=Array.prototype.slice.call(fileList||[]);
+  if(!files.length) return;
+  var pending=files.length, added=0, errs=[];
+  files.forEach(function(file){
+    var rd=new FileReader();
+    rd.onload=function(){ try{ addReport(JSON.parse(rd.result), file.name); added++; }catch(e){ errs.push(file.name+": "+e.message); } finally{ if(--pending===0) done(); } };
+    rd.onerror=function(){ errs.push(file.name+": read error"); if(--pending===0) done(); };
+    rd.readAsText(file);
+  });
+  function done(){
+    if(errs.length && !added) state.lastError="Could not load: "+errs.join("  |  ");
+    render();
+    if(added) toast("Loaded "+added+" report"+(added>1?"s":""));
+    else if(errs.length) toast(errs.length+" file(s) failed");
+  }
+}
+function fetchReports(urls){
+  var pending=urls.length, added=0, errs=[];
+  if(!pending) return;
+  urls.forEach(function(u){
+    fetch(u).then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
+      .then(function(j){ addReport(j, u.split("/").pop()); added++; })
+      .catch(function(e){ errs.push(u+": "+e.message); })
+      .then(function(){
+        if(--pending===0){
+          if(added){ render(); toast("Loaded "+added+" report"+(added>1?"s":"")); }
+          else { state.lastError="Could not fetch report(s). If you opened this file via file://, browsers block fetch — serve the folder over http (python3 -m http.server) or use the file picker. ["+errs.join("; ")+"]"; render(); }
+        }
+      });
+  });
+}
+function loadSamples(){ fetchReports(SAMPLE_FILES.slice()); }
+
+/* =====================================================================
+   THEME + GLOSSARY + DRAG/DROP + INIT
+   ===================================================================== */
+function applyTheme(t){ document.documentElement.setAttribute("data-theme",t); try{ localStorage.setItem("apkplug-theme",t); }catch(e){} }
+function initTheme(){ var t=null; try{ t=localStorage.getItem("apkplug-theme"); }catch(e){} applyTheme(t||"auto"); }
+function toggleTheme(){ var cur=document.documentElement.getAttribute("data-theme")||"auto"; applyTheme(cur==="dark"?"light":"dark"); }
+
+function openGlossary(){ $("#glossary").classList.add("open"); $("#scrim").classList.add("open"); $("#glossary").setAttribute("aria-hidden","false"); $("#glossary").focus(); }
+function closeGlossary(){ $("#glossary").classList.remove("open"); $("#scrim").classList.remove("open"); $("#glossary").setAttribute("aria-hidden","true"); }
+
+function initDnd(){
+  var dz=$("#dropzone"), depth=0;
+  function hasFiles(e){ return e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types||[], "Files")>=0; }
+  window.addEventListener("dragenter",function(e){ if(hasFiles(e)){ e.preventDefault(); depth++; dz.classList.add("show"); } });
+  window.addEventListener("dragover",function(e){ if(dz.classList.contains("show")) e.preventDefault(); });
+  window.addEventListener("dragleave",function(){ if(--depth<=0){ depth=0; dz.classList.remove("show"); } });
+  window.addEventListener("drop",function(e){ if(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length){ e.preventDefault(); depth=0; dz.classList.remove("show"); loadFiles(e.dataTransfer.files); } });
+}
+
+function init(){
+  initTheme();
+  buildGlossary();
+  $("#btnTheme").addEventListener("click",toggleTheme);
+  $("#btnGlossary").addEventListener("click",openGlossary);
+  $("#btnCloseGlossary").addEventListener("click",closeGlossary);
+  $("#scrim").addEventListener("click",closeGlossary);
+  document.addEventListener("keydown",function(e){ if(e.key==="Escape") closeGlossary(); });
+  $("#fileInput").addEventListener("change",function(e){ loadFiles(e.target.files); e.target.value=""; });
+  initDnd();
+  try{
+    var rp=new URLSearchParams(location.search).get("report");
+    if(rp){ fetchReports(rp.split(",").map(function(s){return s.trim();}).filter(Boolean)); }
+  }catch(e){}
+  render();
+}
+if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", init);
+else init();
+</script>
+</body>
+</html>

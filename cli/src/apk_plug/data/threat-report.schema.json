@@ -1,0 +1,207 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://apk-plug.dev/schemas/threat-report.schema.json",
+  "title": "APK Threat Report",
+  "description": "Unified threat report from APK security scanners",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "apk",
+    "generated_at",
+    "tools",
+    "components",
+    "urls",
+    "permissions",
+    "mitre_techniques",
+    "findings",
+    "aggregate_risk"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "description": "Version of this schema",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "apk": {
+      "type": "object",
+      "description": "Metadata about the analyzed APK",
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "APK filename"
+        },
+        "sha256": {
+          "type": "string",
+          "description": "SHA256 hash of the APK"
+        }
+      }
+    },
+    "generated_at": {
+      "type": "string",
+      "description": "ISO 8601 timestamp when report was generated",
+      "format": "date-time"
+    },
+    "tools": {
+      "type": "object",
+      "description": "Status and metadata for each scanner tool",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["ran", "not_run", "error"],
+            "description": "Execution status of the tool"
+          },
+          "threat_level": {
+            "type": "string",
+            "description": "Threat level from quark"
+          },
+          "total_score": {
+            "type": "integer",
+            "description": "Score from quark"
+          },
+          "packers": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Packers detected by apkid"
+          },
+          "obfuscators": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Obfuscators detected by apkid"
+          },
+          "yara_matches": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "YARA rules matched by apktriage"
+          }
+        }
+      }
+    },
+    "components": {
+      "type": "array",
+      "description": "Android components (activities, services, receivers, providers)",
+      "items": {
+        "type": "object",
+        "required": ["type", "name", "source_tool"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "Component type"
+          },
+          "name": {
+            "type": "string",
+            "description": "Fully qualified component name"
+          },
+          "source_tool": {
+            "type": "string",
+            "description": "Tool that reported this component"
+          },
+          "exported": {
+            "type": "boolean",
+            "description": "Whether component is exported"
+          },
+          "permission": {
+            "type": "string",
+            "description": "Permission required to access"
+          }
+        }
+      }
+    },
+    "urls": {
+      "type": "array",
+      "description": "URLs and endpoints found in the APK",
+      "items": {
+        "type": "string"
+      }
+    },
+    "permissions": {
+      "type": "array",
+      "description": "Android permissions requested by the APK",
+      "items": {
+        "type": "string"
+      }
+    },
+    "mitre_techniques": {
+      "type": "array",
+      "description": "MITRE ATT&CK techniques identified",
+      "items": {
+        "type": "object",
+        "required": ["id", "name"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "MITRE technique ID (e.g., T1437)"
+          },
+          "name": {
+            "type": "string",
+            "description": "Technique name"
+          }
+        }
+      }
+    },
+    "findings": {
+      "type": "object",
+      "description": "Findings grouped by scanner tool",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": ["rule", "severity"],
+          "properties": {
+            "rule": {
+              "type": "string",
+              "description": "Rule or check identifier"
+            },
+            "severity": {
+              "type": "string",
+              "enum": ["critical", "high", "medium", "low", "info"],
+              "description": "Severity level"
+            },
+            "description": {
+              "type": "string",
+              "description": "Finding description"
+            },
+            "location": {
+              "type": "string",
+              "description": "File and line location"
+            },
+            "confidence": {
+              "type": "integer",
+              "description": "Confidence score (0-100)"
+            },
+            "category": {
+              "type": "string",
+              "description": "Finding category"
+            }
+          }
+        }
+      }
+    },
+    "aggregate_risk": {
+      "type": "object",
+      "description": "Overall risk assessment",
+      "required": ["score", "level"],
+      "properties": {
+        "score": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Risk score (0-100)"
+        },
+        "level": {
+          "type": "string",
+          "enum": ["low", "medium", "high", "critical"],
+          "description": "Risk level"
+        },
+        "drivers": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Factors contributing to risk score"
+        }
+      }
+    }
+  }
+}

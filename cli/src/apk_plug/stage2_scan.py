@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from apk_plug.workspace import Workspace
 
 from apk_plug.normalize import normalize_scanner_outputs
@@ -458,12 +460,14 @@ def run_quark(workspace: Workspace) -> bool:
     output_file = output_dir / "report.json"
 
     try:
+        # quark's `-o/--output FILE` already writes the JSON report; there is
+        # no `--json` flag (quark-engine >=26 rejects it with exit 2). The
+        # output file is the JSON report.
         run(
             [
                 "quark",
                 "-a", str(workspace.target_apk),
                 "-o", str(output_file),
-                "--json",
             ],
             timeout=600.0,
         )
@@ -521,6 +525,9 @@ def run_apkid(workspace: Workspace) -> bool:
         True if scan succeeded, False otherwise.
     """
     output_dir = workspace.scan_dir / "apkid"
+    # Ensure the output dir exists even on workspaces scaffolded before
+    # scan/apkid was added to WORKSPACE_DIRS (mirrors run_apktriage).
+    output_dir.mkdir(parents=True, exist_ok=True)
     output_file = output_dir / "report.txt"
 
     try:
@@ -534,6 +541,26 @@ def run_apkid(workspace: Workspace) -> bool:
         return True
     except ToolNotFoundError:
         logger.warning("apkid not found - skipping")
+        return False
+
+
+def _safe_scan(name: str, fn: Callable[..., object], *args: object, **kwargs: object) -> bool:
+    """
+    Run one scanner so that it can NEVER abort Stage 2.
+
+    Every scanner is an external tool. Per the skill's graceful-degradation
+    contract (SKILL.md: "apk-plug scan never hard-crashes on a partial
+    toolchain"; stage2-scan.md: "Any scanner absent at run time is logged and
+    marked not_run"), any failure — a missing binary, a non-zero exit, a
+    TIMEOUT, or an unexpected error — must be logged and swallowed so the
+    unified threat-report.json is still produced. Individual run_* helpers
+    catch what they can; this is the orchestration-level backstop that also
+    absorbs subprocess.TimeoutExpired and anything else that slips through.
+    """
+    try:
+        return bool(fn(*args, **kwargs))
+    except Exception as exc:  # noqa: BLE001 - external tools; contract is never-crash
+        logger.warning("Scanner %s did not complete (marked not_run): %s", name, exc)
         return False
 
 
@@ -561,14 +588,16 @@ def run_stage2(
     # asset packs, and DEX-in-assets) for payloads the main scan cannot see.
     scan_companion_artifacts(workspace)
 
-    # Run scanners (graceful degradation - skip unavailable)
-    run_mobsf_scan(workspace, api_key=mobsf_api_key)
-    run_mobsfscan(workspace)
-    run_semgrep(workspace, rules_path=semgrep_rules)
-    run_apktriage(workspace)
-    run_quark(workspace)
-    run_apkleaks(workspace)
-    run_apkid(workspace)
+    # Run scanners (graceful degradation - a scanner that is missing, times
+    # out, or errors unexpectedly is logged and skipped; it must NEVER abort
+    # the unified report. Each call is wrapped by _safe_scan.)
+    _safe_scan("mobsf", run_mobsf_scan, workspace, api_key=mobsf_api_key)
+    _safe_scan("mobsfscan", run_mobsfscan, workspace)
+    _safe_scan("semgrep", run_semgrep, workspace, rules_path=semgrep_rules)
+    _safe_scan("apktriage", run_apktriage, workspace)
+    _safe_scan("quark", run_quark, workspace)
+    _safe_scan("apkleaks", run_apkleaks, workspace)
+    _safe_scan("apkid", run_apkid, workspace)
 
     # Normalize all outputs into unified report
     report = normalize_scanner_outputs(

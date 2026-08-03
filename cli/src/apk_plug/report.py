@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.resources
 import json
 import logging
 from dataclasses import dataclass, field
@@ -13,8 +14,28 @@ import jsonschema
 
 logger = logging.getLogger(__name__)
 
-# Path to schema relative to package
-SCHEMA_PATH = Path(__file__).parent.parent.parent.parent / "assets" / "threat-report.schema.json"
+# Schema resolution order:
+#   1. The copy bundled as package data (src/apk_plug/data/), which is the only
+#      copy present once the CLI is pip/pipx-installed standalone.
+#   2. The repo-root assets/ copy, reachable from a source checkout / editable
+#      install (parent x4 == repo root). Used by the test suite and dev runs.
+# The bundled copy MUST exist in the wheel or a standalone install cannot
+# validate its own report (regression: pipx install had no assets/, so
+# validation raised FileNotFoundError and no threat-report.json was written).
+_BUNDLED_SCHEMA = Path(__file__).parent / "data" / "threat-report.schema.json"
+_REPO_SCHEMA = Path(__file__).parent.parent.parent.parent / "assets" / "threat-report.schema.json"
+
+
+def _default_schema_path() -> Path:
+    """Locate the threat-report schema for a standalone OR source install."""
+    if _BUNDLED_SCHEMA.exists():
+        return _BUNDLED_SCHEMA
+    return _REPO_SCHEMA
+
+
+# Back-compat module attribute (kept so callers/tests referencing report.SCHEMA_PATH
+# still resolve to a real file in both install layouts).
+SCHEMA_PATH = _default_schema_path()
 
 
 class ToolStatus(Enum):
@@ -126,7 +147,7 @@ def load_schema(schema_path: Path | None = None) -> dict[str, Any]:
         Parsed JSON schema as dict.
     """
     if schema_path is None:
-        schema_path = SCHEMA_PATH
+        schema_path = _default_schema_path()
 
     if not schema_path.exists():
         msg = f"Schema file not found: {schema_path}"
