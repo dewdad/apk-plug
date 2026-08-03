@@ -32,6 +32,19 @@ that do not match the app's stated function. High-risk (MobSF marks these):
 A flashlight app requesting `READ_SMS` + `SEND_SMS` = malicious. A messaging app
 requesting them = benign. Judge against declared purpose.
 
+**Ad / tracking / attribution permissions — strip aggressively by default.** These
+feed ad SDKs and analytics, not the app's core feature, so remove them unless the
+declared purpose obviously requires them (recipe:
+[remediation-recipes.md](remediation-recipes.md#remove-a-dangerous-or-adtracking-permission)):
+`com.google.android.gms.permission.AD_ID`,
+`android.permission.ACCESS_ADSERVICES_AD_ID`,
+`ACCESS_ADSERVICES_ATTRIBUTION`, `ACCESS_ADSERVICES_TOPICS` (Privacy Sandbox),
+`com.google.android.finsky.permission.BIND_GET_INSTALL_REFERRER_SERVICE`
+(install-referrer harvesting), plus `SYSTEM_ALERT_WINDOW` (overlay ads),
+`ACCESS_FINE_LOCATION` / `ACCESS_COARSE_LOCATION`, `READ_PHONE_STATE`, and
+`GET_ACCOUNTS` when only an ad/tracker SDK reads them. The bar for removal is "not
+required by the stated feature," not "confirmed malicious."
+
 ## Exported components
 
 `android:exported="true"` on `Activity`/`Service`/`Receiver`/`Provider` without a
@@ -103,11 +116,20 @@ from. Note: DEX smuggled in the APK's own `assets/` is also caught by the Stage 
 
 ## Trackers and adware SDKs
 
-MobSF lists known trackers (Exodus dataset). Adware signatures: aggressive ad SDKs
-(`com.airpush`, `com.startapp`, `com.adcolony` when undisclosed), out-of-app
-overlay ads via `SYSTEM_ALERT_WINDOW`, ads shown from background services. Remove
-the SDK package + its manifest registrations if it is injected/undisclosed
-(recipe: [remediation-recipes.md](remediation-recipes.md#strip-an-injected-trackeradware-sdk)).
+MobSF lists known trackers (Exodus dataset). Ad/tracker SDKs are non-essential to
+the app's real function, so the default disposition is **remove**, not "keep unless
+proven malicious." Signatures: ad networks and mediation
+(`com.google.android.gms.ads`/AdMob, `com.facebook.ads`, `com.applovin`,
+`com.unity3d.ads`, `com.ironsource`, `com.mbridge`/`com.mintegral`, `com.vungle`,
+`com.chartboost`, `com.adcolony`, `com.inmobi`, `com.tapjoy`, `com.startapp`,
+`com.airpush`, `com.pangle`/`com.bytedance.sdk`), analytics/attribution
+(`com.appsflyer`, `com.adjust.sdk`, `io.branch`, `com.flurry`, `com.kochava`),
+out-of-app overlay ads via `SYSTEM_ALERT_WINDOW`, and ads shown from background
+services. Strip the SDK package + its manifest registrations + the permissions it
+pulled in, then neutralize residual glue — full recipe with the package-root table
+in [remediation-recipes.md](remediation-recipes.md#strip-ad-sdks-and-trackers-aggressive).
+Distinguish only the app's *own* first-party analytics (may be intentional) from
+bundled third-party ad/tracker SDKs (strip).
 
 ## Packers and obfuscation
 

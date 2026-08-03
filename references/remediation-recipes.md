@@ -2,18 +2,31 @@
 
 Deep-dive companion to [stage3-remediate.md](stage3-remediate.md): exact, copy-paste
 edits per culprit class. Stage 3 is **manual** — `apk-plug` has no
-`fix`/`patch`/`remediate` subcommand. Edit only inside `decompile/smali/`. Prefer
-minimal, surgical neutralization over deletion — deleting a referenced component
-crashes the app.
+`fix`/`patch`/`remediate` subcommand. Edit only inside `decompile/smali/`.
+
+**Two remediation postures — pick by culprit class:**
+
+- **Surgical (functional / malware code the app links against):** prefer minimal
+  neutralization over deletion — gutting a referenced method or blanking a
+  `const-string` keeps callers linking; deleting a referenced component crashes the
+  app. Use for C2 senders, interception methods, native loaders, exported
+  components the app actually uses.
+- **Aggressive (ad SDKs, trackers/analytics, over-broad permissions):** strip by
+  **default**, not only when "confirmed malicious". Ad and tracking code is
+  non-essential to the app's stated function, so the bar for removal is low: rip
+  the SDK package, delete its manifest registrations, cut the permissions it needs,
+  and neutralize the thin glue left behind. The only constraint is rebuildability —
+  leave no dangling `invoke` to a class you deleted (see the recipes below for how
+  to keep it building).
 
 ## Table of contents
 
 - [Golden rules](#golden-rules)
-- [Remove a dangerous permission](#remove-a-dangerous-permission)
+- [Remove a dangerous or ad/tracking permission](#remove-a-dangerous-or-adtracking-permission)
 - [Remove or guard an exported component](#remove-or-guard-an-exported-component)
 - [Neutralize a malicious method](#neutralize-a-malicious-method)
 - [Remove a hardcoded C2 endpoint](#remove-a-hardcoded-c2-endpoint)
-- [Strip an injected tracker/adware SDK](#strip-an-injected-trackeradware-sdk)
+- [Strip ad SDKs and trackers (aggressive)](#strip-ad-sdks-and-trackers-aggressive)
 - [Block dynamic dex loading](#block-dynamic-dex-loading)
 - [After every edit](#after-every-edit)
 
@@ -21,15 +34,20 @@ crashes the app.
 
 - One change at a time, then rebuild-test. Batching edits makes `apktool b`
   failures impossible to localize.
-- Neutralize > delete. Replace a method body with a safe return rather than
-  removing call sites.
+- Neutralize > delete **for functional/malware code**. Replace a method body with a
+  safe return rather than removing call sites.
+- **Strip ad SDKs, trackers, and over-broad permissions aggressively.** They are
+  never load-bearing for the app's real feature, so remove them by default rather
+  than neutralizing in place. Rip the whole SDK package + manifest entries + the
+  permissions it pulled in, then neutralize only the residual glue that would
+  otherwise leave a dangling reference.
 - Keep a diff. `cp -r decompile/smali decompile/smali.bak` before the first edit
   so you can compare and revert. Log every edit with rationale in
   `patches/CHANGELOG.md` (required by the Stage 3 gate).
 - Never edit jadx Java output (`decompile/java/`) — it is not recompilable. Edit
   smali; read Java only to understand.
 
-## Remove a dangerous permission
+## Remove a dangerous or ad/tracking permission
 
 In `decompile/smali/AndroidManifest.xml`, delete the line:
 
@@ -39,8 +57,40 @@ In `decompile/smali/AndroidManifest.xml`, delete the line:
 
 If code still calls the guarded API after removal, that call throws
 `SecurityException` at runtime — either neutralize the calling method too, or wrap
-the intent. Confirm the app's core features do not legitimately need the
-permission first.
+the intent.
+
+**Default to removal for over-broad and ad/tracking permissions.** Do not wait for
+"confirmed malicious" — if a permission is not required by the app's stated core
+feature, strip it. Reinstate one only if the smoke test in Stage 5 proves a
+legitimate feature broke.
+
+Strip these aggressively unless the app's declared purpose obviously needs them:
+
+```xml
+<!-- Advertising / attribution identifiers (Android 12L+/13+ ad ID + Privacy Sandbox) -->
+<uses-permission android:name="com.google.android.gms.permission.AD_ID"/>
+<uses-permission android:name="android.permission.ACCESS_ADSERVICES_AD_ID"/>
+<uses-permission android:name="android.permission.ACCESS_ADSERVICES_ATTRIBUTION"/>
+<uses-permission android:name="android.permission.ACCESS_ADSERVICES_TOPICS"/>
+<!-- Install-referrer harvesting (attribution SDKs) -->
+<uses-permission android:name="com.google.android.finsky.permission.BIND_GET_INSTALL_REFERRER_SERVICE"/>
+<!-- Overlay ads -->
+<uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
+<!-- Ad-targeting location / device fingerprinting when not a core feature -->
+<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+<uses-permission android:name="android.permission.READ_PHONE_STATE"/>
+<uses-permission android:name="android.permission.GET_ACCOUNTS"/>
+<!-- Background ad/tracker persistence -->
+<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+```
+
+Removing `AD_ID` / `ACCESS_ADSERVICES_*` and the install-referrer service binding is
+safe: they only feed ad attribution and are not linked against by app feature code,
+so they will not throw `SecurityException`. For `SYSTEM_ALERT_WINDOW`,
+location, `READ_PHONE_STATE`, and `GET_ACCOUNTS`, pair the removal with stripping
+the ad SDK that requested them (below) and gut any residual caller, so the guarded
+API is never reached.
 
 ## Remove or guard an exported component
 
@@ -107,14 +157,45 @@ Repoint to a sink that does nothing, e.g. `const-string v0, "http://127.0.0.1/"`
 or neutralize the sending method (above). Do not just delete the `const-string` —
 the following `invoke` expects the register populated.
 
-## Strip an injected tracker/adware SDK
+## Strip ad SDKs and trackers (aggressive)
 
-1. Delete the SDK's smali package dir:
-   `rm -rf decompile/smali/smali/com/airpush`.
-2. Remove its manifest registrations (`<service>`, `<receiver>`, `<activity>`,
-   `<meta-data>`).
-3. Grep for residual references (`grep -r "Lcom/airpush" decompile/smali/`) and
-   neutralize any calling methods, else rebuild fails on unresolved refs.
+Ad and tracking SDKs are non-essential to the app's real function — remove them by
+**default**, not only when injected/undisclosed. Work one SDK at a time so a
+rebuild failure is localizable.
+
+Known ad / tracker / attribution package roots to strip (grep smali for each,
+`Lcom/…`):
+
+| Class | Package roots (smali path `com/…`) |
+| --- | --- |
+| Ad networks / mediation | `com.google.android.gms.ads`, `com.google.ads`, `com.facebook.ads`, `com.applovin`, `com.unity3d.ads`, `com.unity3d.services`, `com.ironsource`, `com.mbridge`, `com.mintegral`, `com.vungle`, `com.chartboost`, `com.adcolony`, `com.inmobi`, `com.tapjoy`, `com.fyber`, `com.smaato`, `com.appodeal`, `com.mopub`, `com.startapp`, `com.airpush`, `com.pangle`, `com.bytedance.sdk`, `com.yandex.mobile.ads`, `com.my.target` |
+| Analytics / attribution / trackers | `com.appsflyer`, `com.adjust.sdk`, `io.branch`, `com.flurry`, `com.amplitude`, `com.mixpanel`, `com.segment.analytics`, `com.kochava`, `com.singular`, `com.onesignal`, `com.comscore` |
+
+Cross-reference MobSF's Exodus tracker list in `threat-report.json` — anything it
+flags that is not the app's own analytics gets the same treatment.
+
+Per SDK:
+
+1. Delete the SDK's smali package dir(s):
+   `rm -rf decompile/smali/smali*/com/applovin`.
+2. Remove its manifest registrations — `<service>`, `<receiver>`, `<activity>`
+   (ad/interstitial/offerwall activities), `<provider>` (many ad SDKs ship an
+   init `ContentProvider`), and `<meta-data>` (app IDs / API keys such as
+   `com.google.android.gms.ads.APPLICATION_ID`, `applovin.sdk.key`).
+3. Remove the permissions that SDK pulled in (see the ad/tracking permission list
+   above) if no other component needs them.
+4. Grep for residual references (`grep -rE "Lcom/applovin|Lcom/appsflyer" decompile/smali/`)
+   and neutralize every calling method — gut ad-load/show calls to `return-void`,
+   ad-getter methods to `const/4 v0, 0x0` + `return-object v0` — else rebuild fails
+   on unresolved refs. A leftover `invoke-static {...}, Lcom/applovin/...` in the
+   app's own code must be removed or nopped, not left dangling.
+5. Delete ad/tracker init calls wired into `Application.onCreate` / the launcher
+   `Activity` so the stripped SDK is never initialized.
+
+Prefer full package deletion over in-place neutralization here: an ad SDK is a
+self-contained subtree, so removing it wholesale is cleaner than gutting hundreds
+of its methods. Only the app's *own* glue code that referenced it needs the
+`return-void` treatment.
 
 ## Block dynamic dex loading
 

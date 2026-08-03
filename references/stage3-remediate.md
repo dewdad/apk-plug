@@ -14,14 +14,22 @@ done, resume with `apk-plug rebuild`.
 | --- | --- | --- |
 | Malicious `<service>` / `<receiver>` | `AndroidManifest.xml` | delete the XML element |
 | Over-broad `<uses-permission>` (e.g. `READ_SMS` on a calculator) | `AndroidManifest.xml` | delete the line |
+| Ad / tracking permission (`AD_ID`, `ACCESS_ADSERVICES_*`, install-referrer bind, overlay `SYSTEM_ALERT_WINDOW`) | `AndroidManifest.xml` | **strip by default** — delete the line unless the stated feature needs it |
+| Ad / tracker / attribution SDK (`com.applovin`, `com.google.android.gms.ads`, `com.appsflyer`, `com.adjust.sdk`, …) | `smali*/com/…`, `AndroidManifest.xml` | **strip aggressively**: `rm -rf` the package subtree; delete its `<service>`/`<receiver>`/`<activity>`/`<provider>`/`<meta-data>`; gut residual glue |
 | Hardcoded C2 / exfil URL | `smali/**/*.smali` or `assets/` | replace the string with `""` or `http://127.0.0.1` via `const-string` |
 | Injected class (`com.evil.Payload`) | `smali/com/evil/Payload.smali` | delete file; remove references in callers |
 | SMS/Call interception method | smali method body | gut it: replace body with `return-void` |
 | Native `.so` exfil library | `lib/arm64-v8a/libevil.so` | delete file; remove the `System.loadLibrary("evil")` call in smali |
 | Obfuscated dex payload | `assets/payload.dex` | delete; remove dynamic-loading code |
 
-**Prefer `return-void` / `const-string ""` over deletion** to avoid smali
-verification errors on rebuild.
+**Two postures:** for functional/malware code the app links against, prefer
+`return-void` / `const-string ""` over deletion to avoid smali verification errors
+on rebuild. For **ad SDKs, trackers, and over-broad/ad permissions, remove
+aggressively by default** — they are non-essential to the app's stated feature, so
+rip the whole package + manifest entries + permissions and neutralize only the
+residual glue that would leave a dangling reference. Full package-root table and
+per-SDK steps in
+[remediation-recipes.md](remediation-recipes.md#strip-ad-sdks-and-trackers-aggressive).
 
 Copy-paste smali snippets per culprit class (void/object/boolean neutralization,
 permission removal, exported-component guarding, C2 repointing, tracker stripping,

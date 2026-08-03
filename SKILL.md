@@ -125,10 +125,13 @@ Gate: `apk-plug verify --stage 2` (report generated + threat summary written).
 ## Stage 3 — Remediate (manual, agent/human only — NOT a CLI command)
 
 **Read `threat-report.json`, then reason.** The CLI does not patch. Route by the
-decision tree below, then apply the minimal smali/manifest edit. Prefer
-`return-void` / `const-string ""` over deletion to avoid verification errors.
-Patterns table, grep workflow, cert-pinning tool choice (`apk-mitm` vs
-`android-unpinner`), and the LLM reasoning-aid template
+decision tree below, then apply the smali/manifest edit. Two postures: for
+functional/malware code prefer `return-void` / `const-string ""` over deletion to
+avoid verification errors; for **ad SDKs, trackers, and over-broad/ad permissions,
+strip aggressively by default** — they are never load-bearing for the stated
+feature, so rip the package + manifest entries + permissions and neutralize only
+the residual glue. Patterns table, grep workflow, cert-pinning tool choice
+(`apk-mitm` vs `android-unpinner`), and the LLM reasoning-aid template
 ([assets/llm-analysis-prompt.md](assets/llm-analysis-prompt.md)) are in
 [stage3-remediate.md](references/stage3-remediate.md). Log every edit with
 rationale in `patches/CHANGELOG.md`.
@@ -143,8 +146,13 @@ aggregate_risk / quark score
 │     → manual review in jadx → confirm intent → remediate only if confirmed
 ├── APKiD reports a packer (Bangcle, Jiagu, 360, ...)
 │     → unpack first (FRIDA-DEXDump / BlackDex) → re-run Stage 1–2
+├── ad / tracker SDK present (Exodus/MobSF list) OR ad/tracking permission
+│     (AD_ID, ACCESS_ADSERVICES_*, install-referrer bind, overlay SYSTEM_ALERT_WINDOW)
+│     → STRIP AGGRESSIVELY regardless of score: rm the SDK package subtree,
+│       delete its manifest entries, cut the permissions it pulled in, gut residual
+│       glue. Bar for removal is "not required by the stated feature," not "malicious."
 └── clean / low score
-      → no remediation; archive the report
+      → no ad/tracker/over-broad-permission cruft: archive the report
 ```
 
 Gate: `apk-plug verify --stage 3` (every Stage-2 threat has a matching edit; no
