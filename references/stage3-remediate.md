@@ -32,6 +32,10 @@ never as auto-fixers. When done, resume with `apk-plug rebuild`.
 **Prefer `return-void` / `const-string ""` over deletion** to avoid smali
 verification errors on rebuild.
 
+Copy-paste smali snippets per culprit class (void/object/boolean neutralization,
+permission removal, exported-component guarding, C2 repointing, tracker stripping,
+dex-loader blocking) are in [remediation-recipes.md](remediation-recipes.md).
+
 ## Workflow
 
 ```bash

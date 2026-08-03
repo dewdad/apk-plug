@@ -214,7 +214,9 @@ all four.
 - [stage1-decompile.md](references/stage1-decompile.md) — jadx + apktool + gates
 - [stage1.5-native.md](references/stage1.5-native.md) — Ghidra + JNIAnalyzer
 - [stage2-scan.md](references/stage2-scan.md) — 8-scanner matrix + MobSF API
+- [detection-heuristics.md](references/detection-heuristics.md) — reading threat-report.json: permissions, C2, MITRE, packers
 - [stage3-remediate.md](references/stage3-remediate.md) — patterns + cert-pinning
+- [remediation-recipes.md](references/remediation-recipes.md) — copy-paste smali edits per culprit class
 - [stage4-rebuild-sign.md](references/stage4-rebuild-sign.md) — build/align/sign
 - [stage5-validate.md](references/stage5-validate.md) — re-scan + dynamic checks
 - [tool-disposition.md](references/tool-disposition.md) — keep/add/replace matrix

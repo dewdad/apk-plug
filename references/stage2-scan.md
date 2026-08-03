@@ -134,6 +134,11 @@ severity, and an `aggregate_risk` block. Schema:
 `assets/threat-report.schema.json`. Stage 3 reads THIS one structure, not six
 tool-specific formats.
 
+**Reading & classifying the findings** — the permission catalog, MITRE technique
+list, C2 grep, dynamic-loading/reflection patterns, tracker SDK names, and
+packer/native heuristics for turning this report into a malicious/suspicious/benign
+triage decision are in [detection-heuristics.md](detection-heuristics.md).
+
 ---
 
 ## Verification gate
