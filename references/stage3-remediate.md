@@ -1,21 +1,12 @@
 # Stage 3 — Remediate (Manual, Guided)
 
-## ⚠️ Legal gate (restated)
-
-**Only operate on APKs you own, have explicit written authorization to modify, or
-are analyzing in an isolated research lab.** Remediation modifies and re-signs a
-third-party binary — the point of no return. Redistribution may violate
-copyright, the CFAA, or DMCA §1201. Confirm lawful authorization for THIS APK
-before editing. If unsure whether the work is legal, stop and ask.
-
 ## This stage is NOT wrapped by the CLI
 
-`apk-plug` halts after `scan`. **There is no `fix`/`patch`/`remediate`
-subcommand.** Remediation is **inherently manual** — no tool auto-patches
-malicious logic. You read `threat-report.json`, reason about intent, and edit the
-apktool smali/resource output yourself. LLMs assist as *reasoning aids* (explain
-smali, propose patches) via [../assets/llm-analysis-prompt.md](../assets/llm-analysis-prompt.md),
-never as auto-fixers. When done, resume with `apk-plug rebuild`.
+`apk-plug` halts after `scan`, then resumes at `rebuild`. You read
+`threat-report.json`, reason about intent, and edit the apktool smali/resource
+output yourself. LLMs assist as *reasoning aids* (explain smali, propose patches)
+via [../assets/llm-analysis-prompt.md](../assets/llm-analysis-prompt.md). When
+done, resume with `apk-plug rebuild`.
 
 ## Common remediation patterns
 

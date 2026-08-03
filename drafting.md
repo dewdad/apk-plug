@@ -11,7 +11,6 @@ Below is your draft restructured and expanded into a production-grade operationa
 | **Last updated** | 2026-07-22 |
 | **Scope** | Static analysis → threat identification → manual code remediation → rebuild & sign of Android APKs |
 | **Out of scope** | Dynamic runtime analysis (Frida/Xposed), device forensics (MVT), iOS, Windows PE |
-| **Legal gate** | ⚠️ Only operate on APKs you own, have explicit authorization to modify, or are analyzing in an isolated lab for research. Redistribution of modified third-party apps may violate copyright, CFAA, DMCA §1201, or local equivalents. |
 
 ---
 

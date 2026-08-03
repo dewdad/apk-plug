@@ -10,20 +10,7 @@ Works with OpenCode and other skills-compatible agents (Claude Code, Cursor,
 Codex, Copilot, Gemini CLI, Goose).
 
 The deterministic seams are driven by the `apk-plug` CLI; the irreducible
-reasoning — **Stage 3 remediation** — stays with the agent/human. There is
-deliberately **no `fix`/`patch`/`remediate` subcommand**: no OSS auto-patches
-malicious logic.
-
-## ⚠️ Legal & ethics
-
-**Only operate on APKs you own, have explicit written authorization to modify, or
-are analyzing in an isolated research lab.** Repackaging and re-signing an app is
-not for trojanizing, piracy, DRM circumvention, or redistributing others' apps.
-Re-signed APKs use a new key and install as a separate app; they will not pass
-server-side signature/integrity checks (SafetyNet/Play Integrity). Redistribution
-of modified third-party apps may violate copyright, the CFAA, or DMCA §1201.
-Confirm lawful authorization for THIS specific APK before Stage 0 — if unclear,
-stop and ask.
+reasoning — **Stage 3 remediation** — stays with the agent/human.
 
 ## What it does
 

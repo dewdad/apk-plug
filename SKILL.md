@@ -27,17 +27,6 @@ sign → validation, for a single Android app package. The deterministic seams a
 driven by the bundled **`apk-plug`** CLI; the irreducible reasoning (Stage 3
 remediation) stays with you.
 
-## ⚠️ Legal gate — read before running anything
-
-**Only operate on APKs you own, have explicit written authorization to modify,
-or are analyzing in an isolated research lab.** Redistribution or installation of
-modified third-party apps may violate copyright, the CFAA, DMCA §1201, or local
-equivalents. Confirm lawful authorization for THIS specific APK before Stage 0.
-If authorization is unclear, stop and ask the human — do not proceed on
-assumption. This gate is restated at the top of
-[stage3-remediate.md](references/stage3-remediate.md) because remediation is the
-point of no return.
-
 ## When to use
 
 - A single `.apk` / `.aab` / `.xapk` / `.apkm` must be statically triaged, a
@@ -67,8 +56,7 @@ Host matrix, pinned tool versions, and the one-shot bootstrap live in
 ## Pipeline overview
 
 `apk-plug` wraps every deterministic stage. It **halts after `scan`** — Stage 3
-(remediation) is agent/human work — then resumes at `rebuild`. There is
-deliberately **no `fix`/`patch`/`remediate` subcommand**.
+(remediation) is agent/human work — then resumes at `rebuild`.
 
 ```
 apk-plug init      → Stage 0  input normalization      (references/stage0-input.md)
@@ -140,10 +128,10 @@ Gate: `apk-plug verify --stage 2` (report generated + threat summary written).
 decision tree below, then apply the minimal smali/manifest edit. Prefer
 `return-void` / `const-string ""` over deletion to avoid verification errors.
 Patterns table, grep workflow, cert-pinning tool choice (`apk-mitm` vs
-`android-unpinner`), the LLM reasoning-aid template
-([assets/llm-analysis-prompt.md](assets/llm-analysis-prompt.md)), and the legal
-restatement are in [stage3-remediate.md](references/stage3-remediate.md). Log
-every edit with rationale in `patches/CHANGELOG.md`.
+`android-unpinner`), and the LLM reasoning-aid template
+([assets/llm-analysis-prompt.md](assets/llm-analysis-prompt.md)) are in
+[stage3-remediate.md](references/stage3-remediate.md). Log every edit with
+rationale in `patches/CHANGELOG.md`.
 
 ### Master decision tree (driven by threat-report.json)
 
@@ -200,12 +188,6 @@ the threat gone AND the app still launching.
 | 5 Validate | `--stage 5` | Re-scan clean; permission set not broader; app launches |
 
 Any failed gate exits non-zero and names the gate. Never proceed past a red gate.
-
-## Safety posture
-
-Legal gate up front; Stage 3 stays manual (no auto-patching of malicious logic);
-keystores are gitignored; the CLI has no destructive `fix` subcommand. Preserve
-all four.
 
 ## References
 
