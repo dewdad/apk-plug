@@ -6,6 +6,7 @@ import hashlib
 import json
 import logging
 import re
+import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
@@ -143,14 +144,34 @@ def parse_quark(data: dict[str, Any]) -> dict[str, Any]:
     if "crimes" in data:
         for crime in data["crimes"]:
             if isinstance(crime, dict):
+                confidence = _quark_confidence_to_int(crime.get("confidence", 0))
                 result["findings"].append({
                     "rule": crime.get("crime", "unknown_behavior"),
-                    "severity": _quark_confidence_to_severity(crime.get("confidence", 0)),
+                    "severity": _quark_confidence_to_severity(confidence),
                     "description": crime.get("crime", ""),
-                    "confidence": crime.get("confidence", 0),
+                    "confidence": confidence,
                 })
 
     return result
+
+
+def _quark_confidence_to_int(confidence: object) -> int:
+    """Coerce a quark confidence into an integer 0-100.
+
+    Real quark-engine emits confidence as a percentage STRING (e.g. "100%",
+    "60%"), while older fixtures / tests may use a bare int/float. Both must
+    map to an int so downstream severity comparison and the schema (which types
+    `confidence` as integer) never break. Anything unparseable becomes 0.
+    """
+    if isinstance(confidence, bool):
+        return 0
+    if isinstance(confidence, (int, float)):
+        return int(confidence)
+    if isinstance(confidence, str):
+        match = re.search(r"-?\d+", confidence)
+        if match:
+            return int(match.group())
+    return 0
 
 
 def _quark_confidence_to_severity(confidence: int | float) -> str:
@@ -348,23 +369,36 @@ def calculate_aggregate_risk(
     score = 0
     drivers: list[str] = []
 
-    # Count findings by severity
+    # Count findings by severity.
     severity_weights = {"critical": 25, "high": 15, "medium": 5, "low": 1, "info": 0}
 
+    # quark's per-crime findings are behavioral observations, not per-item
+    # threats — its risk contribution is the single weighted total_score /
+    # threat_level handled below (matching the stage-2 decision tree, which
+    # keys off quark's 0-100 score). Summing every crime's confidence-derived
+    # severity here would double-count and let quark's known over-reporting
+    # alone max the aggregate on clean SDK-heavy apps, so exclude it.
     for tool_name, findings in all_findings.items():
+        if tool_name == "quark":
+            continue
         for finding in findings:
             severity = finding.get("severity", "info")
             weight = severity_weights.get(severity, 0)
             score += weight
 
-    # Check quark threat level
+    # quark emits a human label ("Low/Moderate/High Risk"), not the bare
+    # "high"/"dangerous" tokens — match case-insensitively. The label
+    # over-reports ("High Risk" at near-zero total_score on SDK-heavy apps),
+    # so credit it only when quark's numeric score is also non-trivial.
     quark_data = tools_data.get("quark", {})
     if quark_data.get("status") == ToolStatus.RAN.value:
-        threat_level = quark_data.get("threat_level", "")
-        if threat_level in ("high", "dangerous"):
+        threat_level = str(quark_data.get("threat_level", "")).lower()
+        total_score = quark_data.get("total_score", 0)
+        if not isinstance(total_score, (int, float)):
+            total_score = 0
+        if ("high" in threat_level or "dangerous" in threat_level) and total_score >= 10:
             score += 30
             drivers.append("quark_high_threat")
-        total_score = quark_data.get("total_score", 0)
         if total_score >= 80:
             score += 20
             drivers.append("quark_score_80plus")
@@ -410,6 +444,112 @@ def compute_sha256(path: Path) -> str:
         for chunk in iter(lambda: f.read(8192), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
+_ANDROID_NS = "{http://schemas.android.com/apk/res/android}"
+
+
+def _decoded_manifest_path(apk_path: Path) -> Path:
+    return apk_path.parent.parent / "decompile" / "smali" / "AndroidManifest.xml"
+
+
+def parse_manifest_permissions(manifest_path: Path) -> list[str]:
+    """Read requested permissions from an apktool-decoded AndroidManifest.xml.
+
+    Fallback for when MobSF (the only other permission source) did not run.
+    Returns [] on any parse error so report generation never breaks.
+    """
+    if not manifest_path.exists():
+        return []
+    try:
+        root = ET.parse(manifest_path).getroot()
+    except (ET.ParseError, OSError) as e:
+        logger.warning("Could not parse manifest %s: %s", manifest_path, e)
+        return []
+    perms: list[str] = []
+    for el in root.iter("uses-permission"):
+        name = el.get(f"{_ANDROID_NS}name")
+        if name:
+            perms.append(name)
+    return perms
+
+
+def parse_manifest_components(manifest_path: Path) -> list[dict[str, Any]]:
+    """Read exported components from an apktool-decoded AndroidManifest.xml.
+
+    Fallback for when MobSF did not run. Only emits components explicitly
+    marked android:exported="true" (the attack surface). Returns [] on error.
+    """
+    if not manifest_path.exists():
+        return []
+    try:
+        root = ET.parse(manifest_path).getroot()
+    except (ET.ParseError, OSError) as e:
+        logger.warning("Could not parse manifest %s: %s", manifest_path, e)
+        return []
+    app = root.find("application")
+    if app is None:
+        return []
+    components: list[dict[str, Any]] = []
+    for tag in ("activity", "activity-alias", "service", "receiver", "provider"):
+        for el in app.findall(tag):
+            if el.get(f"{_ANDROID_NS}exported") != "true":
+                continue
+            name = el.get(f"{_ANDROID_NS}name")
+            if not name:
+                continue
+            comp: dict[str, Any] = {
+                "type": tag.replace("activity-alias", "activity"),
+                "name": name,
+                "source_tool": "manifest",
+                "exported": True,
+            }
+            perm = el.get(f"{_ANDROID_NS}permission")
+            if perm:
+                comp["permission"] = perm
+            components.append(comp)
+    return components
+
+
+_URL_RE = re.compile(r"https?://[a-zA-Z0-9._~:/?#\[\]@!$&'()*+,;=%-]+")
+_URL_HOST_RE = re.compile(r"https?://([a-zA-Z0-9._-]+)")
+_URL_SCAN_MAX_FILES = 20000
+
+
+def extract_urls_from_sources(java_dir: Path, *, limit: int = 4000) -> list[str]:
+    """Extract http(s) URLs from decompiled Java as an apkleaks fallback.
+
+    apkleaks can abort its JSON writer on very large multi-DEX APKs, leaving no
+    URL evidence. This is a best-effort sweep bounded by file/URL caps so it
+    stays cheap. Schema-namespace hosts (schemas.android.com, w3.org, etc.) are
+    dropped because they are XML boilerplate, not network endpoints.
+    """
+    if not java_dir.exists():
+        return []
+    schema_hosts = {
+        "schemas.android.com", "www.w3.org", "www.apache.org", "xmlpull.org",
+        "ns.adobe.com", "xml.org", "www.ietf.org", "tizen.org", "semver.org",
+        "java.sun.com", "www.slf4j.org",
+    }
+    found: set[str] = set()
+    scanned = 0
+    for path in java_dir.rglob("*.java"):
+        if scanned >= _URL_SCAN_MAX_FILES or len(found) >= limit:
+            break
+        scanned += 1
+        try:
+            text = path.read_text(errors="ignore")
+        except OSError:
+            continue
+        for m in _URL_RE.finditer(text):
+            url = m.group()
+            host_m = _URL_HOST_RE.match(url)
+            if host_m and host_m.group(1) in schema_hosts:
+                continue
+            found.add(url)
+            if len(found) >= limit:
+                break
+    return sorted(found)
 
 
 def _safe_parse(
@@ -559,6 +699,18 @@ def normalize_scanner_outputs(
     # keep only hashable strings so report generation can never hard-crash here.
     all_urls = sorted({u for u in all_urls if isinstance(u, str)})
     all_permissions = sorted({p for p in all_permissions if isinstance(p, str)})
+
+    # Fallbacks from the apktool-decoded manifest / jadx sources when the only
+    # scanner that supplies these (MobSF) did not run, or apkleaks produced no
+    # URLs. Best-effort: failures return [] and leave the report unchanged.
+    manifest_path = _decoded_manifest_path(apk_path)
+    if not all_permissions:
+        all_permissions = sorted(set(parse_manifest_permissions(manifest_path)))
+    if not all_components:
+        all_components = parse_manifest_components(manifest_path)
+    if not all_urls:
+        java_dir = apk_path.parent.parent / "decompile" / "java"
+        all_urls = extract_urls_from_sources(java_dir)
 
     # Calculate aggregate risk
     aggregate_risk = calculate_aggregate_risk(tools_data, all_findings)

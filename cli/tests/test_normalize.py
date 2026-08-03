@@ -296,6 +296,58 @@ class TestParserNeverAborts:
         assert "total_score" not in report.tools["quark"]
 
 
+class TestQuarkRealWorldConfidence:
+    """Real quark-engine emits confidence as a percent STRING ("100%"), not an
+    int. The parser must coerce it so severity comparison and the integer-typed
+    schema field both hold, and 278 findings are not silently dropped."""
+
+    def test_string_percent_confidence_is_parsed(self, tmp_path: Path) -> None:
+        scan_dir = tmp_path / "scan"
+        (scan_dir / "quark").mkdir(parents=True)
+        (scan_dir / "quark" / "report.json").write_text(json.dumps({
+            "threat_level": "High Risk",
+            "total_score": 2,
+            "crimes": [
+                {"crime": "Read SMS", "confidence": "100%"},
+                {"crime": "Get location", "confidence": "40%"},
+                {"crime": "Benign util", "confidence": "0%"},
+            ],
+        }))
+        apk_path = tmp_path / "test.apk"
+        apk_path.touch()
+
+        report = normalize_scanner_outputs(
+            scan_dir=scan_dir, apk_path=apk_path, now="2026-07-23T12:00:00+00:00"
+        )
+
+        assert report.tools["quark"]["status"] == "ran"
+        findings = report.findings["quark"]
+        assert len(findings) == 3
+        by_rule = {f["rule"]: f for f in findings}
+        assert by_rule["Read SMS"]["confidence"] == 100
+        assert by_rule["Read SMS"]["severity"] == "critical"
+        assert by_rule["Get location"]["confidence"] == 40
+        assert by_rule["Get location"]["severity"] == "medium"
+        assert all(isinstance(f["confidence"], int) for f in findings)
+
+    def test_high_risk_label_with_low_score_does_not_inflate(self, tmp_path: Path) -> None:
+        scan_dir = tmp_path / "scan"
+        (scan_dir / "quark").mkdir(parents=True)
+        (scan_dir / "quark" / "report.json").write_text(json.dumps({
+            "threat_level": "High Risk",
+            "total_score": 2,
+            "crimes": [{"crime": "reflection", "confidence": "20%"}],
+        }))
+        apk_path = tmp_path / "test.apk"
+        apk_path.touch()
+
+        report = normalize_scanner_outputs(
+            scan_dir=scan_dir, apk_path=apk_path, now="2026-07-23T12:00:00+00:00"
+        )
+
+        assert "quark_high_threat" not in report.aggregate_risk["drivers"]
+
+
 class TestOutputStability:
     """Test that output is deterministic and byte-stable."""
 
